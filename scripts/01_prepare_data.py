@@ -12,6 +12,7 @@ Usage:
 
 import os
 import sys
+import shutil
 import zipfile
 import pandas as pd
 import numpy as np
@@ -37,6 +38,21 @@ def check_for_zip():
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                 zip_ref.extractall("data/raw/")
             print("✓ Files extracted successfully!")
+
+            # Move files from subdirectory if needed
+            subdir = "data/raw/elliptic_bitcoin_dataset"
+            if os.path.exists(subdir):
+                print("Moving files from subdirectory...")
+                for filename in os.listdir(subdir):
+                    src = os.path.join(subdir, filename)
+                    dst = os.path.join("data/raw", filename)
+                    if os.path.isfile(src):
+                        shutil.move(src, dst)
+                        print(f"  ✓ Moved {filename}")
+                # Remove empty subdirectory
+                os.rmdir(subdir)
+                print("✓ Files organized!")
+
             return True
         except Exception as e:
             print(f"✗ Error extracting ZIP: {e}")
