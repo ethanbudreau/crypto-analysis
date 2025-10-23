@@ -12,6 +12,7 @@ Usage:
 
 import os
 import sys
+import zipfile
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -25,48 +26,82 @@ def setup_directories():
     print("✓ Directories created")
 
 
+def check_for_zip():
+    """Check if the downloaded ZIP file exists and extract it."""
+    zip_path = "data/raw/elliptic-data-set.zip"
+
+    if os.path.exists(zip_path):
+        print(f"\n✓ Found ZIP file: {zip_path}")
+        print("Extracting files...")
+        try:
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall("data/raw/")
+            print("✓ Files extracted successfully!")
+            return True
+        except Exception as e:
+            print(f"✗ Error extracting ZIP: {e}")
+            return False
+    return False
+
+
 def download_dataset():
     """
-    Download the Elliptic Bitcoin Transaction Dataset.
+    Check for and prepare the Elliptic Bitcoin Transaction Dataset.
 
-    TODO: Implement dataset download
-    Options:
-    1. Kaggle API: kaggle datasets download -d ellipticco/elliptic-data-set
-    2. Manual download instructions
-    3. Direct URL if available
+    The dataset must be manually downloaded from Kaggle.
     """
     print("\n" + "="*50)
     print("DATASET DOWNLOAD")
     print("="*50)
-    print("\nThe Elliptic dataset needs to be downloaded manually.")
-    print("\nSteps:")
-    print("1. Visit: https://www.kaggle.com/ellipticco/elliptic-data-set")
-    print("2. Download the dataset ZIP file")
-    print("3. Extract to: data/raw/")
-    print("\nExpected files:")
-    print("  - data/raw/elliptic_txs_features.csv")
-    print("  - data/raw/elliptic_txs_classes.csv")
-    print("  - data/raw/elliptic_txs_edgelist.csv")
-    print("\nAlternatively, use Kaggle API:")
-    print("  pip install kaggle")
-    print("  kaggle datasets download -d ellipticco/elliptic-data-set -p data/raw/")
-    print("  unzip data/raw/elliptic-data-set.zip -d data/raw/")
 
-    # Check if files exist
+    # Required CSV files
     required_files = [
         "data/raw/elliptic_txs_features.csv",
         "data/raw/elliptic_txs_classes.csv",
         "data/raw/elliptic_txs_edgelist.csv"
     ]
 
+    # Check if CSV files already exist
     all_exist = all(os.path.exists(f) for f in required_files)
 
     if all_exist:
-        print("\n✓ All required files found!")
+        print("\n✓ Dataset files already exist!")
+        print("\nFound files:")
+        for f in required_files:
+            print(f"  ✓ {f}")
         return True
-    else:
-        print("\n✗ Dataset files not found. Please download first.")
-        return False
+
+    # Check for ZIP file and extract if present
+    if check_for_zip():
+        # Check again if extraction was successful
+        if all(os.path.exists(f) for f in required_files):
+            print("\n✓ All required files ready!")
+            return True
+
+    # Dataset not found - provide download instructions
+    print("\n" + "-"*50)
+    print("DATASET NOT FOUND - MANUAL DOWNLOAD REQUIRED")
+    print("-"*50)
+    print("\nPlease follow these steps:")
+    print("\n1. Create a Kaggle account (free):")
+    print("   https://www.kaggle.com/account/login")
+    print("\n2. Download the Elliptic dataset:")
+    print("   https://www.kaggle.com/datasets/ellipticco/elliptic-data-set")
+    print("   Click the 'Download' button (top right)")
+    print("\n3. Move the ZIP file to this directory:")
+    print("   mv ~/Downloads/archive.zip data/raw/elliptic-data-set.zip")
+    print("   (The downloaded file might be named 'archive.zip')")
+    print("\n4. Run this script again:")
+    print("   python scripts/01_prepare_data.py")
+    print("\nThe script will automatically extract the ZIP file.")
+
+    print("\n" + "-"*50)
+    print("Expected files after extraction:")
+    for f in required_files:
+        print(f"  - {f}")
+
+    print("\n" + "-"*50)
+    return False
 
 
 def load_raw_data():

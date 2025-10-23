@@ -88,7 +88,11 @@ crypto-transaction-analysis/
 ### Individual Steps
 
 ```bash
-# 1. Prepare dataset (download & preprocess)
+# 1. Download dataset manually
+# Visit https://www.kaggle.com/datasets/ellipticco/elliptic-data-set
+# Download the ZIP and move to: data/raw/elliptic-data-set.zip
+
+# 2. Prepare dataset (extract & preprocess)
 python scripts/01_prepare_data.py
 
 # 2. Run benchmarks
