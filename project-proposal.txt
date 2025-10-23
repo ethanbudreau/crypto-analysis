@@ -1,0 +1,178 @@
+Cryptocurrency Transaction Analysis with GPU-Accelerated
+Databases
+Omkar Khade
+okhade@wisc.edu
+Handan Hu
+handan.hu@wisc.edu
+Ethan Budreau
+ebudreau@wisc.edu
+Ashvin Sehgal
+asehgal9@wisc.edu
+1 Introduction
+1.1 Background
+Cryptocurrency networks like Bitcoin have rapidly gained traction
+as decentralized financial systems, but their pseudonymous nature
+has also made them attractive for illicit transactions, including
+money laundering, ransomware payments, and dark web trade, due
+to the high degree of anonymity that can be achieved [5 ]. However,
+these networks are made of a large number of nodes and a massive
+volume of transactions. Each transaction can link to multiple ad-
+dresses, making it difficult to establish clear ownership patterns or
+detect hidden clusters of criminal activity [3 ]. This makes tracking
+and analyzing illicit transactions a difficult and computationally
+intensive task. There is a subsequent reduction in the ability for
+enforcement, regulators, and researchers to analyze and respond
+appropriately to changing dynamics within these networks.
+With the advent of GPU-accelerated databases, such as Sirius [6 ],
+there could be opportunities to improve the performance of these
+typically graph-based queries and analyses. By leveraging massive
+parallelism on GPUs, such systems can process large volumes of
+data and execute complex graph queries much faster than CPU-
+based architectures [2, 4]. A demonstrable improvement in the
+performance of this analysis could open future doorways to tracking
+and managing these types of transactions. As such, our primary
+goal is to determine whether we can enhance the efficiency of
+analyzing Bitcoin transactions for illicit activity by utilizing Sirius,
+a GPU-accelerated database.
+The public availability of data from the largest networks also
+provides a great opportunity for data access, with multiple datasets
+already available. The full transaction log can be scraped manually,
+if needed [3].
+1.2 Motivation
+The motivation behind this project lies in the urgent need for scal-
+able and efficient tools to analyze blockchain transaction data at
+scale. As cryptocurrencies continue to expand globally, the size
+and complexity of their underlying transaction graphs have grown
+exponentially, posing major challenges for traditional CPU-based
+analytical systems [5 ]. Identifying illicit financial behavior within
+these massive networks requires rapid querying, clustering, and
+pattern detection over billions of edges and nodes. However, such
+analyses are often too computationally intensive to perform in real
+time using conventional databases. Leveraging GPU-accelerated
+databases like Sirius offers a promising alternative — providing
+parallelized data processing capabilities that can significantly re-
+duce latency in graph traversal, aggregation, and anomaly detection
+tasks [1, 6].
+Furthermore, efficient blockchain analysis has real-world impli-
+cations in enhancing financial transparency and supporting law
+enforcement agencies in combating cybercrime. Faster, GPU-driven
+transaction analytics can enable proactive identification of money
+laundering patterns, improve forensic investigations, and facili-
+tate compliance with anti-money-laundering (AML) regulations [5].
+Beyond the security domain, the outcomes of this project can ex-
+tend to optimizing blockchain infrastructure, supporting economic
+research, and improving network monitoring. By demonstrating
+measurable performance gains with GPU acceleration, this work
+aims to bridge the gap between large-scale blockchain data analysis
+and actionable insights — paving the way for more responsive and
+intelligent financial data systems [2, 4].
+1.3 Challenges
+Several challenges arise in evaluating GPU acceleration for blockchain
+analytics. First, the Bitcoin transaction graph exhibits skewed de-
+gree distributions, where a few nodes have disproportionately high
+connectivity, creating load imbalance during parallel execution [3 ].
+Second, GPU databases may be constrained by limited VRAM ca-
+pacity, requiring careful data partitioning or streaming [1]. Finally,
+ensuring fair performance comparisons between CPU- and GPU-
+based systems necessitates controlling for hardware costs, query
+optimization, and data transfer overheads between main memory
+and device memory [6].
+2 Task Plan
+This project aims to evaluate the performance of graph queries on
+GPU-accelerated databases by comparing Sirius with DuckDB using
+real-world blockchain data. Specifically, we will model the Bitcoin
+transaction network as a graph and run queries to detect connec-
+tions between known illicit nodes and other transactions. The work
+includes dataset preparation, query implementation on both sys-
+tems, and benchmarking to measure scalability and speedup from
+GPU acceleration.
+Our key contributions include:(1) a comprehensive performance
+comparison of CPU vs GPU graph databases for blockchain and
+fraud detection workloads, (2) empirical characterization of when
+GPU acceleration provides meaningful benefits based on graph size
+and query complexity, and (3) a reusable benchmark framework and
+preprocessed dataset to support future research on GPU-accelerated
+graph analytics.
+2.1 Dataset
+The project uses the Elliptic Bitcoin Transaction Dataset [ 5], an
+anonymized transaction graph derived from the Bitcoin blockchain.
+Omkar Khade, Handan Hu, Ethan Budreau, and Ashvin Sehgal
+Each node represents a transaction, and each edge captures the
+flow of Bitcoins between transactions. The dataset includes about
+203,769 nodes and 234,355 edges, with roughly 2% labeled as illicit
+and 21% as licit. The labeled nature of the Elliptic dataset provides
+an ideal basis for experiments that combine structural analysis with
+classification-oriented workloads.
+We plan to begin with a subset of 10K nodes to ensure manage-
+able testing, then scale to 50K, 100K, and the full 200K+ nodes to
+evaluate performance as data volume increases. The preprocessing
+pipeline will be implemented in Python and the cleaned data will be
+converted into formats compatible with both DuckDB and Sirius.
+2.2 Query on DuckDB
+We will first implement all graph queries on DuckDB as a CPU-
+based baseline. Our main query types will include:
+• 1-hop and 2-hop reachability: starting from known illicit
+nodes to detect directly and indirectly connected transac-
+tions.
+• k-hop traversal: exploring multi-step relationships among
+transactions up to 3 or 4 hops away.
+• Path analysis: computing the shortest path distance to
+measure how far each node is from the nearest known illicit
+node
+2.3 Query on Sirius
+After establishing our query suite in DuckDB, we will replicate
+equivalent graph queries on Sirius to test GPU acceleration. Sirius
+integrates with DuckDB through the Substrait query interface, en-
+abling compatible SQL queries to be executed directly on the GPU
+without major query rewrites.
+Performance and correctness will be verified by comparing query
+outputs with DuckDB results. This stage will demonstrate how
+GPU acceleration affects query latency and scalability for graph
+workloads.
+2.4 Benchmarking and Evaluation
+We will conduct systematic benchmarking to compare DuckDB
+(CPU) and Sirius (GPU) performance under identical conditions.
+Each query will be executed multiple times on datasets of increasing
+size to assess scalability and consistency.
+The following metrics will be collected:
+• Query execution time
+• Memory/VRAM usage
+• CPU/GPU utilization
+Benchmark results will be visualized through comparative bar
+charts and scalability curves to clearly illustrate performance trends.
+We will explore which types of queries benefit most from GPU ac-
+celeration, analyze the graph size threshold where GPU advantages
+emerge, and identify cases where computation falls back to CPU ex-
+ecution. We expect GPU acceleration to yield significant speedups
+on multi-hop and path queries, with diminishing returns for simpler
+one-hop traversals.
+3 Timeline
+• Oct 24 - Prepare dataset, set up environment
+• Oct 31 - Implement graph queries on DuckDB
+• Nov 7 - Implement graph queries on Sirius
+• Nov 14 - Run benchmarks and collect query metrics
+• Nov 28 - Analyze results, visualize figures, and draft report
+• Dec 1 - Prepare presentation slides
+• Dec 15 - Finalize and submit project report
+References
+[1] Yinnian Lin, Lei Zou, and Xunbin Su. 2025. Towards Sufficient GPU-accelerated
+Dynamic Graph Management: Survey and Experiment. Proceedings of the VLDB
+Endowment 18 (2025), 599–612. https://www.vldb.org/pvldb/vol18/p599-lin.pdf
+[2] Lingxiao Ma, Zhi Yang, Han Chen, Jilong Xue, and Yafei Dai. 2017. Garaph:
+Efficient GPU-accelerated Graph Processing on a Single Machine with Bal-
+anced Replication. In Proceedings of the 2017 USENIX Annual Technical Con-
+ference (USENIX ATC 17). USENIX Association, Santa Clara, CA, USA. https:
+//www.usenix.org/conference/atc17/technical-sessions/presentation/ma
+[3] Hugo Schnoering and Michalis Vazirgiannis. 2024. Bitcoin Research with a Trans-
+action Graph Dataset. arXiv:2411.10325 [cs.CR] https://arxiv.org/abs/2411.10325
+[4] Qiange Wang, Xin Ai, Yanfeng Zhang, Jing Chen, and Ge Yu. 2022. HyT-
+Graph: GPU-Accelerated Graph Processing with Hybrid Transfer Management.
+arXiv:2208.14935 [cs.DC] https://arxiv.org/abs/2208.14935
+[5] Mark Weber, Giacomo Domeniconi, Jie Chen, Daniel Karl I. Weidele, Claudio
+Bellei, Tom Robinson, and Charles E. Leiserson. 2019. Anti-Money Laundering
+in Bitcoin: Experimenting with Graph Convolutional Networks for Financial
+Forensics. arXiv:1908.02591 [cs.SI] https://arxiv.org/abs/1908.02591
+[6] Bobbi Yogatama, Yifei Yang, Kevin Kristensen, Devesh Sarda, Abigale Kim, Adrian
+Cockcroft, Yu Teng, Joshua Patterson, Gregory Kimball, Wes McKinney, Weiwei
+Gong, and Xiangyao Yu. 2025. Rethinking Analytical Processing in the GPU Era.
+arXiv:2508.04701 [cs.DB] https://arxiv.org/abs/2508.04701
