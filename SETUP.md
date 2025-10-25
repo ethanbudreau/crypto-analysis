@@ -105,23 +105,27 @@ source venv/bin/activate
 - GPU-accelerated query testing
 
 **Prerequisites:**
-- NVIDIA GPU drivers installed
-- CUDA Toolkit installed
-- Miniconda/Anaconda installed
+- NVIDIA GPU with drivers installed
+- sudo access (for installing CUDA, CMake, etc.)
 
 **Setup:**
 
 ```bash
-bash setup/setup_sirius.sh
+bash setup/setup_sirius_complete.sh
 ```
 
 **What this does:**
-1. Installs system dependencies (cmake, ninja, etc.)
-2. Creates conda environment with libcudf
-3. Clones and builds Sirius from source
-4. Installs DuckDB Python package with GPU support
+1. Checks system requirements and GPU availability
+2. Installs/upgrades CMake to 3.30.5
+3. Installs CUDA Toolkit and configures GCC compatibility
+4. Installs Miniconda (if needed)
+5. Creates conda environment with libcudf
+6. Clones and builds Sirius from source
+7. Installs DuckDB Python package with GPU support
 
 **This takes 15-30 minutes** depending on your CPU cores.
+
+**Note:** The script handles all dependency installation and common setup issues automatically. For manual troubleshooting steps, see archived scripts in `setup/archive/`.
 
 **Activate environment:**
 ```bash

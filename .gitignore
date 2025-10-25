@@ -39,6 +39,8 @@ venv.bak/
 data/raw/*.csv
 data/raw/*.parquet
 data/raw/*.json
+data/raw/*.zip
+data/raw/*:Zone.Identifier
 data/processed/*.csv
 data/processed/*.parquet
 data/processed/*.duckdb
@@ -68,6 +70,9 @@ results/figures/*.svg
 sirius/
 *.duckdb
 *.db
+
+# Setup script archives (troubleshooting backups)
+setup/archive/
 
 # Temporary files
 tmp/

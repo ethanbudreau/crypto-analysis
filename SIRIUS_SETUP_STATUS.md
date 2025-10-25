@@ -41,25 +41,41 @@
 
 ---
 
-## 🔧 Setup Scripts Created
+## 🔧 Setup Scripts
 
-During this setup session, we created several helper scripts in `setup/`:
+The setup process has been streamlined into a single comprehensive script:
 
-1. **`install_sirius_after_cuda.sh`** - Initial Sirius setup (superseded by #4)
-2. **`upgrade_cmake.sh`** - Upgrades CMake to 3.30.5
-3. **`fix_sirius_clone.sh`** - Cleans and re-clones Sirius repository
-4. **`fix_cuda_compatibility.sh`** - Installs GCC 12 for CUDA compatibility
-5. **`build_sirius.sh`** - Initial build script (had issues)
-6. **`build_sirius_fixed.sh`** ⭐ - **Final working build script**
+### Main Script: `setup/setup_sirius_complete.sh` ⭐
 
-### Key Script: `build_sirius_fixed.sh`
+This all-in-one script handles the complete Sirius setup from scratch:
 
-This is the main script that successfully built Sirius. It handles:
-- Conda environment activation
-- All environment variables (LIBCUDF_ENV_PREFIX, LDFLAGS, etc.)
-- Git submodules (including substrait directory conflict resolution)
-- Full Sirius compilation
-- Python package installation
+**What it does:**
+1. Checks system requirements (GPU, NVIDIA drivers)
+2. Installs/upgrades CMake to 3.30.5 (required version)
+3. Installs CUDA Toolkit and configures GCC 12 for compatibility
+4. Installs Miniconda (if not already present)
+5. Creates conda environment with libcudf
+6. Clones Sirius repository with all submodules
+7. Configures all environment variables (LIBCUDF_ENV_PREFIX, LDFLAGS, etc.)
+8. Builds Sirius with all CPU cores
+9. Installs DuckDB Python package with GPU support
+10. Verifies the installation
+
+**Usage:**
+```bash
+cd ~/crypto-transaction-analysis
+bash setup/setup_sirius_complete.sh
+```
+
+### Supporting Scripts
+
+- **`check_requirements.sh`** - Validates system has necessary components
+- **`setup_duckdb.sh`** - CPU-only DuckDB setup (no GPU required)
+- **`quick_start.sh`** - Fast DuckDB setup for team members
+
+### Archived Troubleshooting Scripts
+
+Original troubleshooting scripts created during initial setup are preserved in `setup/archive/` for reference. These individual fix scripts have been integrated into `setup_sirius_complete.sh`.
 
 ---
 
