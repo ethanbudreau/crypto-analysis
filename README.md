@@ -20,6 +20,36 @@ Using the **Elliptic Bitcoin Transaction Dataset** (203K+ nodes, 234K+ edges), w
 - k-hop traversal (3-4 hops)
 - Shortest path analysis
 
+### 🎯 Key Findings
+
+**DuckDB outperforms Sirius across all tested scenarios** on datasets ranging from 10K to 1M edges:
+
+#### Full Elliptic Dataset (234K edges, 203K nodes)
+
+| Query | DuckDB | Sirius | Speedup |
+|-------|--------|--------|---------|
+| 1_hop | **0.011s** | 4.16s | **372x faster** |
+| 2_hop | **0.019s** | 3.32s | **178x faster** |
+| k_hop | **0.043s** | 3.92s | **91x faster** |
+| shortest_path | **0.053s** | 3.92s | **74x faster** |
+
+**Average**: DuckDB is **179x faster** than Sirius on the full Elliptic dataset.
+
+#### 1M Edge Dataset (synthetic, 4.3x larger)
+
+| Query | DuckDB | Sirius | Speedup |
+|-------|--------|--------|---------|
+| 1_hop | **0.016s** | 2.93s | **186x faster** |
+| 2_hop | **0.059s** | 3.57s | **61x faster** |
+| k_hop | **0.039s** | 3.89s | **100x faster** |
+| shortest_path | **0.097s** | 2.81s | **29x faster** |
+
+**Average**: DuckDB is **94x faster** than Sirius on 1M edges.
+
+**Conclusion**: For graph queries on datasets under ~10M edges, CPU-optimized databases provide superior performance due to GPU initialization and data transfer overhead. GPU advantages would emerge at 50M+ edges or with persistent GPU sessions.
+
+See [BENCHMARK_FINDINGS.md](BENCHMARK_FINDINGS.md) for complete analysis.
+
 ## Quick Start
 
 ```bash
