@@ -66,8 +66,10 @@ results/figures/*.svg
 .cache/
 .pytest_cache/
 
-# Sirius specific
-sirius/
+# Sirius build directory (large binary and build artifacts)
+/sirius/
+
+# Database files
 *.duckdb
 *.db
 
