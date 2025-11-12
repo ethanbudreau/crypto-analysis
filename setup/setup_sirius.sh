@@ -16,10 +16,10 @@ if ! command -v nvidia-smi &> /dev/null; then
     exit 1
 fi
 
-if ! command -v nvcc &> /dev/null; then
-    echo "✗ Error: nvcc not found. CUDA >= 11.2 required."
-    exit 1
-fi
+# if ! command -v nvcc &> /dev/null; then
+#     echo "✗ Error: nvcc not found. CUDA >= 11.2 required."
+#     exit 1
+# fi
 
 if ! command -v cmake &> /dev/null; then
     echo "✗ Error: cmake not found. Install with: sudo apt install cmake"
