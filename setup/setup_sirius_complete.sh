@@ -12,7 +12,7 @@ echo ""
 echo "This script will:"
 echo "  1. Check system requirements"
 echo "  2. Install/upgrade CMake to 3.30+"
-echo "  3. Install CUDA Toolkit and configure GCC compatibility"
+echo "  3. Configure GCC compatibility for CUDA"
 echo "  4. Install Miniconda (if needed)"
 echo "  5. Create conda environment with libcudf"
 echo "  6. Clone and build Sirius from source"
@@ -87,32 +87,11 @@ fi
 echo ""
 
 # ==========================================
-# Step 3: Install CUDA and Fix GCC Compatibility
+# Step 3: Fix GCC Compatibility
 # ==========================================
-echo "Step 3/6: Checking CUDA Toolkit..."
-
-if ! command -v nvcc &> /dev/null; then
-    echo "Installing CUDA Toolkit..."
-    sudo apt-get update
-    sudo apt-get install -y nvidia-cuda-toolkit
-
-    # Add CUDA to PATH
-    if ! grep -q "cuda/bin" ~/.bashrc; then
-        echo "" >> ~/.bashrc
-        echo "# CUDA Toolkit paths" >> ~/.bashrc
-        echo 'export PATH=/usr/local/cuda/bin:$PATH' >> ~/.bashrc
-        echo 'export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
-    fi
-
-    export PATH=/usr/local/cuda/bin:$PATH
-    export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-    echo "✓ CUDA Toolkit installed"
-else
-    echo "✓ CUDA Toolkit already installed: $(nvcc --version | grep release | awk '{print $5}')"
-fi
+echo "Step 3/6: Checking GCC compatibility for CUDA..."
 
 # Install GCC 12 for CUDA compatibility
-echo "Checking GCC compatibility..."
 GCC_VERSION=$(gcc --version | head -n 1 | grep -oP '\d+\.\d+' | head -n 1)
 echo "Current GCC version: $GCC_VERSION"
 

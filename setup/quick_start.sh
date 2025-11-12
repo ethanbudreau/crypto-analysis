@@ -23,20 +23,16 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo "🚀 Starting FULL setup (DuckDB + Sirius)..."
     echo ""
 
-    # Check if CUDA and GPU are available
-    if ! command -v nvidia-smi &> /dev/null || ! command -v nvcc &> /dev/null; then
-        echo "⚠ Warning: GPU or CUDA not detected."
-        echo "Sirius requires:"
-        echo "  - NVIDIA GPU (Volta or newer)"
-        echo "  - CUDA >= 11.2"
-        echo "  - Ubuntu >= 20.04"
+    # Check if GPU is available (required)
+    if ! command -v nvidia-smi &> /dev/null; then
+        echo "✗ Error: nvidia-smi not found. NVIDIA GPU required for Sirius."
         echo ""
         read -p "Continue with DuckDB-only setup instead? (y/n) " -n 1 -r
         echo ""
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             bash setup/setup_duckdb.sh
         else
-            echo "Setup cancelled. Please install GPU drivers and CUDA first."
+            echo "Setup cancelled. Please install GPU drivers first."
             exit 1
         fi
     else

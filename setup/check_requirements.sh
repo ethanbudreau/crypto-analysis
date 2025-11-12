@@ -58,19 +58,8 @@ else
 fi
 echo ""
 
-# Check CUDA (required for Sirius)
-echo "5. CUDA (required for Sirius):"
-if command -v nvcc &> /dev/null; then
-    CUDA_VERSION=$(nvcc --version | grep release | awk '{print $5}' | cut -d',' -f1)
-    echo "   ✓ CUDA $CUDA_VERSION found"
-else
-    echo "   ✗ nvcc not found"
-    echo "   Note: CUDA >= 11.2 required for Sirius"
-fi
-echo ""
-
 # Check CMake (required for Sirius)
-echo "6. CMake (required for Sirius):"
+echo "5. CMake (required for Sirius):"
 if command -v cmake &> /dev/null; then
     CMAKE_VERSION=$(cmake --version | head -n1 | awk '{print $3}')
     echo "   ✓ CMake $CMAKE_VERSION found"
@@ -80,7 +69,7 @@ fi
 echo ""
 
 # Check conda (recommended for Sirius)
-echo "7. Conda (recommended for Sirius):"
+echo "6. Conda (recommended for Sirius):"
 if command -v conda &> /dev/null; then
     CONDA_VERSION=$(conda --version | awk '{print $2}')
     echo "   ✓ Conda $CONDA_VERSION found"
@@ -91,7 +80,7 @@ fi
 echo ""
 
 # Check git
-echo "8. Git:"
+echo "7. Git:"
 if command -v git &> /dev/null; then
     echo "   ✓ Git found"
 else
