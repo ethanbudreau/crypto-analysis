@@ -20,35 +20,61 @@ Using the **Elliptic Bitcoin Transaction Dataset** (203K+ nodes, 234K+ edges), w
 - k-hop traversal (3-4 hops)
 - Shortest path analysis
 
-### 🎯 Key Findings
+### 🎯 Key Findings - CORRECTED (2025-11-17)
 
-**DuckDB outperforms Sirius across all tested scenarios** on datasets ranging from 10K to 1M edges:
+**GPU acceleration provides up to 10.6x speedup** on large datasets using verified GPU-compatible queries:
 
-#### Full Elliptic Dataset (234K edges, 203K nodes)
+#### Performance by Dataset Size (Verified GPU Queries Only)
 
-| Query | DuckDB | Sirius | Speedup |
-|-------|--------|--------|---------|
-| 1_hop | **0.011s** | 4.16s | **372x faster** |
-| 2_hop | **0.019s** | 3.32s | **178x faster** |
-| k_hop | **0.043s** | 3.92s | **91x faster** |
-| shortest_path | **0.053s** | 3.92s | **74x faster** |
+**20M Edge Dataset** (⭐ Peak GPU Performance)
+| Query | DuckDB (CPU) | Sirius (GPU) | GPU Speedup |
+|-------|--------------|--------------|-------------|
+| 1_hop | 69.31 ms | 47.51 ms | 1.46x faster |
+| 2_hop | 461.34 ms | **49.80 ms** | **9.26x faster** ⭐ |
+| 3_hop | 476.59 ms | **45.06 ms** | **10.58x faster** ⭐ |
 
-**Average**: DuckDB is **179x faster** than Sirius on the full Elliptic dataset.
+**5M Edge Dataset** (GPU Crossover Point)
+| Query | DuckDB (CPU) | Sirius (GPU) | GPU Speedup |
+|-------|--------------|--------------|-------------|
+| 1_hop | 21.17 ms | 44.60 ms | 0.47x (CPU wins) |
+| 2_hop | 108.60 ms | **38.48 ms** | **2.82x faster** |
+| 3_hop | 104.84 ms | **40.33 ms** | **2.60x faster** |
 
-#### 1M Edge Dataset (synthetic, 4.3x larger)
+**1M Edge Dataset** (Mixed Results)
+| Query | DuckDB (CPU) | Sirius (GPU) | Result |
+|-------|--------------|--------------|--------|
+| 1_hop | 9.89 ms | 15.37 ms | CPU 1.55x faster |
+| 2_hop | 22.44 ms | **13.01 ms** | GPU 1.72x faster |
+| 3_hop | 27.07 ms | **17.11 ms** | GPU 1.58x faster |
 
-| Query | DuckDB | Sirius | Speedup |
-|-------|--------|--------|---------|
-| 1_hop | **0.016s** | 2.93s | **186x faster** |
-| 2_hop | **0.059s** | 3.57s | **61x faster** |
-| k_hop | **0.039s** | 3.89s | **100x faster** |
-| shortest_path | **0.097s** | 2.81s | **29x faster** |
+**100k Edge Dataset** (CPU Wins on Simple Queries)
+| Query | DuckDB (CPU) | Sirius (GPU) | Result |
+|-------|--------------|--------------|--------|
+| 1_hop | **5.27 ms** | 9.90 ms | CPU 1.88x faster |
+| 2_hop | 10.24 ms | **7.02 ms** | GPU 1.46x faster |
+| 3_hop | 12.23 ms | **7.21 ms** | GPU 1.70x faster |
 
-**Average**: DuckDB is **94x faster** than Sirius on 1M edges.
+#### Key Insights
 
-**Conclusion**: For graph queries on datasets under ~10M edges, CPU-optimized databases provide superior performance due to GPU initialization and data transfer overhead. GPU advantages would emerge at 50M+ edges or with persistent GPU sessions.
+1. **GPU wins at scale**: 10x speedup on 20M datasets for multi-hop traversal
+2. **Crossover point**: GPU becomes advantageous around 5M edges for complex queries
+3. **Query complexity matters**: 2-hop and 3-hop queries benefit more from GPU than 1-hop
+4. **Initialization overhead**: GPU has overhead that impacts small datasets
 
-See [BENCHMARK_FINDINGS.md](BENCHMARK_FINDINGS.md) for complete analysis.
+#### Important Notes
+
+⚠️ **Verified GPU queries only**: `1_hop_gpu`, `2_hop_gpu`, `3_hop_gpu`
+
+❌ **Excluded queries** (CPU fallback due to UNION ALL):
+- `k_hop_gpu`
+- `shortest_path_gpu`
+
+**Overall Performance:**
+- **Sirius average**: 28.0 ms per query (24 tests)
+- **DuckDB average**: 110.7 ms per query (24 tests)
+- **Overall GPU advantage**: 3.95x speedup
+
+> 📊 **Methodology**: All tests use persistent session mode (100 queries per session) to amortize initialization overhead and measure true query execution performance. See [VERIFIED_GPU_BENCHMARK_RESULTS.md](VERIFIED_GPU_BENCHMARK_RESULTS.md) for complete analysis.
 
 ## Quick Start
 
@@ -125,8 +151,15 @@ crypto-transaction-analysis/
 # 2. Prepare dataset (extract & preprocess)
 python scripts/01_prepare_data.py
 
-# 2. Run benchmarks
-python scripts/02_run_benchmarks.py
+# 2. Run benchmarks (multiple modes available)
+# Cold start (includes initialization overhead)
+python scripts/02_run_benchmarks.py --db both --sizes full --queries 1_hop
+
+# Warm cache (fair GPU comparison, excludes init)
+python scripts/02_run_benchmarks.py --db both --sizes full --queries 1_hop --mode warm_cache
+
+# Persistent session (100 sequential queries)
+python scripts/02_run_benchmarks.py --db both --sizes full --queries 1_hop --mode persistent_session
 
 # 3. Generate visualizations
 python scripts/03_visualize.py
