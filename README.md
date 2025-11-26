@@ -20,11 +20,11 @@ Using the **Elliptic Bitcoin Transaction Dataset** (203K+ nodes, 234K+ edges), w
 - k-hop traversal (3-4 hops)
 - Shortest path analysis
 
-### 🎯 Key Findings - CORRECTED (2025-11-17)
+### 🎯 Key Findings
 
-**GPU acceleration provides up to 10.6x speedup** on large datasets using verified GPU-compatible queries:
+**GPU acceleration provides up to 10.6x speedup** on large datasets for complex graph traversal queries:
 
-#### Performance by Dataset Size (Verified GPU Queries Only)
+#### Performance by Dataset Size
 
 **20M Edge Dataset** (⭐ Peak GPU Performance)
 | Query | DuckDB (CPU) | Sirius (GPU) | GPU Speedup |
@@ -61,20 +61,20 @@ Using the **Elliptic Bitcoin Transaction Dataset** (203K+ nodes, 234K+ edges), w
 3. **Query complexity matters**: 2-hop and 3-hop queries benefit more from GPU than 1-hop
 4. **Initialization overhead**: GPU has overhead that impacts small datasets
 
-#### Important Notes
+#### GPU Compatibility
 
-⚠️ **Verified GPU queries only**: `1_hop_gpu`, `2_hop_gpu`, `3_hop_gpu`
+✅ **GPU-accelerated queries**: `1_hop_gpu`, `2_hop_gpu`, `3_hop_gpu`
 
-❌ **Excluded queries** (CPU fallback due to UNION ALL):
-- `k_hop_gpu`
-- `shortest_path_gpu`
+❌ **CPU fallback** (UNION ALL not GPU-compatible):
+- `k_hop_gpu` - Variable k-hop traversal
+- `shortest_path_gpu` - Shortest path analysis
 
 **Overall Performance:**
 - **Sirius average**: 28.0 ms per query (24 tests)
 - **DuckDB average**: 110.7 ms per query (24 tests)
 - **Overall GPU advantage**: 3.95x speedup
 
-> 📊 **Methodology**: All tests use persistent session mode (100 queries per session) to amortize initialization overhead and measure true query execution performance. See [VERIFIED_GPU_BENCHMARK_RESULTS.md](VERIFIED_GPU_BENCHMARK_RESULTS.md) for complete analysis.
+> 📊 **Methodology**: All benchmarks use persistent session mode (100 queries per session) to amortize initialization overhead and measure true query execution performance. See [VERIFIED_GPU_BENCHMARK_RESULTS.md](VERIFIED_GPU_BENCHMARK_RESULTS.md) for detailed analysis.
 
 ## Quick Start
 
@@ -102,26 +102,29 @@ See [SETUP.md](SETUP.md) for detailed installation instructions.
 ```
 crypto-transaction-analysis/
 ├── setup/                  # Automated setup scripts
-│   ├── quick_start.sh      # One-command setup for team
+│   ├── quick_start.sh      # One-command setup
 │   ├── check_requirements.sh
 │   ├── setup_duckdb.sh
 │   └── setup_sirius.sh
 │
 ├── data/
 │   ├── raw/                # Original Elliptic dataset
-│   └── processed/          # Cleaned subsets (10K, 50K, 100K, 200K)
+│   └── processed/          # Processed datasets (100K, 1M, 5M, 20M edges)
 │
 ├── sql/                    # SQL query definitions
 │   ├── duckdb/             # CPU-based queries
 │   └── sirius/             # GPU-accelerated queries
 │
 ├── scripts/                # Python automation scripts
-│   ├── 01_prepare_data.py      # Dataset preprocessing
-│   ├── 02_run_benchmarks.py    # Benchmark execution
-│   └── 03_visualize.py         # Results visualization
+│   ├── 01_prepare_data.py                    # Dataset preprocessing
+│   ├── 02_run_benchmarks.py                  # Core benchmark functions
+│   ├── 03_visualize.py                       # Results visualization
+│   ├── run_persistent_session_benchmarks.py  # Main benchmark runner
+│   └── create_slim_datasets.py               # Dataset optimization
 │
+├── adhoc_tests/            # Ad-hoc SQL test files
 ├── notebooks/              # Jupyter notebooks for exploration
-├── results/                # Benchmark outputs and figures
+├── results/                # Benchmark outputs and CSV data
 └── run_all.sh              # Master pipeline script
 ```
 
@@ -151,17 +154,17 @@ crypto-transaction-analysis/
 # 2. Prepare dataset (extract & preprocess)
 python scripts/01_prepare_data.py
 
-# 2. Run benchmarks (multiple modes available)
-# Cold start (includes initialization overhead)
-python scripts/02_run_benchmarks.py --db both --sizes full --queries 1_hop
+# 3. Run benchmarks
+# Full benchmark suite (recommended)
+python scripts/run_persistent_session_benchmarks.py --db both
 
-# Warm cache (fair GPU comparison, excludes init)
-python scripts/02_run_benchmarks.py --db both --sizes full --queries 1_hop --mode warm_cache
+# Quick test (10 queries per session)
+python scripts/run_persistent_session_benchmarks.py --quick
 
-# Persistent session (100 sequential queries)
-python scripts/02_run_benchmarks.py --db both --sizes full --queries 1_hop --mode persistent_session
+# Specific database only
+python scripts/run_persistent_session_benchmarks.py --db sirius
 
-# 3. Generate visualizations
+# 4. Generate visualizations
 python scripts/03_visualize.py
 ```
 
@@ -182,38 +185,39 @@ jupyter notebook
 
 All queries are defined in SQL files under `sql/` directory:
 
-1. **1-hop Reachability** (`sql/*/1_hop.sql`)
+### GPU-Accelerated Queries (Benchmarked)
+
+1. **1-hop Reachability** (`sql/*/1_hop_gpu.sql`)
    - Find transactions directly connected to known illicit nodes
 
-2. **2-hop Reachability** (`sql/*/2_hop.sql`)
+2. **2-hop Reachability** (`sql/*/2_hop_gpu.sql`)
    - Find transactions 2 steps away from illicit activity
 
-3. **k-hop Traversal** (`sql/*/k_hop.sql`)
-   - Multi-step relationship exploration (3-4 hops)
+3. **3-hop Reachability** (`sql/*/3_hop_gpu.sql`)
+   - Find transactions 3 steps away from illicit activity
 
-4. **Shortest Path** (`sql/*/shortest_path.sql`)
+### CPU-Only Queries (Not Currently Benchmarked)
+
+4. **k-hop Traversal** (`sql/*/k_hop.sql`, `sql/*/k_hop_gpu.sql`)
+   - Multi-step relationship exploration (variable k hops)
+   - ⚠️ Uses UNION ALL - causes CPU fallback in Sirius
+
+5. **Shortest Path** (`sql/*/shortest_path.sql`, `sql/*/shortest_path_gpu.sql`)
    - Compute distance to nearest illicit node
+   - ⚠️ Uses UNION ALL - causes CPU fallback in Sirius
 
 ## Benchmarking
 
 The benchmark suite measures:
-- **Query execution time** (multiple runs for statistical validity)
+- **Query execution time** (persistent session with 100 queries per test)
 - **Memory/VRAM usage**
 - **CPU/GPU utilization**
 
 Results are scaled across dataset sizes:
-- 10K nodes (testing)
-- 50K nodes
-- 100K nodes
-- 200K+ nodes (full dataset)
-
-## Expected Outcomes
-
-We hypothesize that:
-- GPU acceleration will provide significant speedup on multi-hop and path queries
-- Simple 1-hop queries may show diminishing returns
-- Performance advantages will emerge at larger graph sizes
-- Some queries may fall back to CPU execution
+- 100K edges
+- 1M edges
+- 5M edges
+- 20M edges
 
 ## Technology Stack
 
@@ -260,9 +264,11 @@ See [project-proposal.txt](project-proposal.txt) for full academic references in
 
 ## Documentation
 
-- **[SETUP.md](SETUP.md)** - Detailed installation instructions
-- **[project-proposal.txt](project-proposal.txt)** - Full research proposal
-- **SQL files** - Query documentation and implementations
+- **[README.md](README.md)** - This file: project overview and key findings
+- **[VERIFIED_GPU_BENCHMARK_RESULTS.md](VERIFIED_GPU_BENCHMARK_RESULTS.md)** - Detailed performance analysis
+- **[CURRENT_STATUS.md](CURRENT_STATUS.md)** - Project status and reproducibility guide
+- **[SETUP.md](SETUP.md)** - Installation instructions
+- **[project-proposal.txt](project-proposal.txt)** - Research proposal and references
 
 ## Troubleshooting
 
