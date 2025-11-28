@@ -32,7 +32,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             bash setup/setup_duckdb.sh
         else
-            echo "Setup cancelled. Please install GPU drivers first."
+            echo "Setup cancelled. PInstalling missing packageslease install GPU drivers first."
             exit 1
         fi
     else

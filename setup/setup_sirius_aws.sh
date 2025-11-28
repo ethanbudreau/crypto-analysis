@@ -47,6 +47,48 @@ fi
 echo "✓ All prerequisites found"
 echo ""
 
+# Verify conda environment is activated (required on AWS images)
+if [ -z "$CONDA_DEFAULT_ENV" ]; then
+    echo "✗ Error: No conda environment activated. AWS images should have an environment pre-activated."
+    echo "  Please activate your conda environment first."
+    exit 1
+fi
+
+echo "✓ Using active conda environment: $CONDA_DEFAULT_ENV"
+echo "  CONDA_PREFIX: $CONDA_PREFIX"
+if [ -n "$LIBCUDF_ENV_PREFIX" ]; then
+    echo "  LIBCUDF_ENV_PREFIX: $LIBCUDF_ENV_PREFIX"
+fi
+echo ""
+
+# Initialize conda if needed (for conda commands)
+if [ -f "$(conda info --base)/etc/profile.d/conda.sh" ]; then
+    source "$(conda info --base)/etc/profile.d/conda.sh"
+fi
+
+# Install/update packages from environment.yml into current environment
+if [ -f "environment.yml" ]; then
+    echo "Installing packages from environment.yml into $CONDA_DEFAULT_ENV..."
+    
+    # Create a temporary environment.yml with the current env name
+    TEMP_ENV_YML=$(mktemp)
+    sed "s/^name:.*/name: $CONDA_DEFAULT_ENV/" environment.yml > "$TEMP_ENV_YML"
+    
+    # Update environment with packages from environment.yml
+    conda env update -n "$CONDA_DEFAULT_ENV" -f "$TEMP_ENV_YML" --prune || {
+        echo "⚠ Note: Some conda packages may conflict or already be installed"
+        echo "  This is normal if packages are already present"
+    }
+    
+    # Clean up temp file
+    rm -f "$TEMP_ENV_YML"
+    
+    echo "✓ Packages updated in existing environment"
+else
+    echo "⚠ environment.yml not found, skipping package installation"
+fi
+echo ""
+
 # Install system dependencies (only if missing, AWS images may have them)
 echo "Checking system dependencies..."
 MISSING_PACKAGES=()
@@ -67,41 +109,33 @@ else
 fi
 echo ""
 
-# Create conda environment
-echo "Creating conda environment for Sirius..."
-if conda env list | grep -q "crypto-analysis"; then
-    echo "✓ Environment 'crypto-analysis' already exists"
-    # For AWS/automated environments, use RECREATE_ENV variable or skip
-    if [ "${RECREATE_ENV:-no}" = "yes" ]; then
-        echo "Recreating environment (RECREATE_ENV=yes)..."
-        conda env remove -n crypto-analysis -y
-        conda env create -f environment.yml
-    else
-        echo "Skipping recreation. Set RECREATE_ENV=yes to force recreation."
-        # Update environment in case dependencies changed
-        conda env update -n crypto-analysis -f environment.yml --prune
-    fi
-else
-    conda env create -f environment.yml
-fi
-echo "✓ Conda environment ready"
-echo ""
-
-# Activate conda environment
-echo "Activating conda environment..."
-source $(conda info --base)/etc/profile.d/conda.sh
-conda activate crypto-analysis
-echo "✓ Environment activated"
+# Using existing conda environment (always true on AWS)
+echo "✓ Using existing conda environment: $CONDA_DEFAULT_ENV"
 echo ""
 
 # Set libcudf environment variable
 echo "Setting libcudf environment variable..."
-export LIBCUDF_ENV_PREFIX=$CONDA_PREFIX
+if [ -z "$LIBCUDF_ENV_PREFIX" ]; then
+    export LIBCUDF_ENV_PREFIX=$CONDA_PREFIX
+    echo "✓ LIBCUDF_ENV_PREFIX set to $CONDA_PREFIX"
+else
+    echo "✓ LIBCUDF_ENV_PREFIX already set: $LIBCUDF_ENV_PREFIX"
+    # Verify it matches current conda prefix
+    if [ "$LIBCUDF_ENV_PREFIX" != "$CONDA_PREFIX" ]; then
+        echo "  ⚠ Note: LIBCUDF_ENV_PREFIX ($LIBCUDF_ENV_PREFIX) differs from CONDA_PREFIX ($CONDA_PREFIX)"
+        echo "  Using existing LIBCUDF_ENV_PREFIX value"
+    fi
+fi
 
 # Ensure CUDA paths are set (common on AWS GPU instances)
 if [ -d "/usr/local/cuda" ]; then
-    export PATH=/usr/local/cuda/bin:$PATH
-    export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+    # Check if already in PATH/LD_LIBRARY_PATH
+    if [[ ":$PATH:" != *":/usr/local/cuda/bin:"* ]]; then
+        export PATH=/usr/local/cuda/bin:$PATH
+    fi
+    if [[ ":$LD_LIBRARY_PATH:" != *":/usr/local/cuda/lib64:"* ]]; then
+        export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+    fi
     echo "✓ CUDA paths detected and set"
 fi
 
@@ -115,7 +149,6 @@ if [ -d "/usr/local/cuda" ] && ! grep -q "/usr/local/cuda/bin" ~/.bashrc 2>/dev/
     echo "export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH" >> ~/.bashrc
 fi
 
-echo "✓ LIBCUDF_ENV_PREFIX set to $CONDA_PREFIX"
 echo ""
 
 # Clone Sirius repository
@@ -186,8 +219,13 @@ echo "========================================="
 echo "Sirius Setup Complete!"
 echo "========================================="
 echo ""
+echo "Current environment: $CONDA_DEFAULT_ENV"
+echo "CONDA_PREFIX: $CONDA_PREFIX"
+echo "LIBCUDF_ENV_PREFIX: ${LIBCUDF_ENV_PREFIX:-not set}"
+echo ""
 echo "To use Sirius in the future:"
-echo "  1. Activate conda: conda activate crypto-analysis"
+echo "  1. Ensure conda environment is activated: $CONDA_DEFAULT_ENV"
+echo "     (Already active if you just ran this script)"
 echo "  2. Navigate to project: cd $PROJECT_ROOT"
 echo "  3. Start Sirius CLI: ./sirius/build/release/duckdb mydb.duckdb"
 echo "  4. Initialize GPU: call gpu_buffer_init('1 GB', '2 GB');"
@@ -196,6 +234,5 @@ echo ""
 echo "Note: Sirius binary located at: $SIRIUS_BINARY"
 echo ""
 echo "Environment variables:"
-echo "  - RECREATE_ENV=yes    : Force recreate conda environment"
 echo "  - REBUILD_SIRIUS=yes  : Force rebuild Sirius from scratch"
 echo ""
