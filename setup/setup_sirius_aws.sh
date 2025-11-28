@@ -115,17 +115,8 @@ echo ""
 
 # Set libcudf environment variable
 echo "Setting libcudf environment variable..."
-if [ -z "$LIBCUDF_ENV_PREFIX" ]; then
-    export LIBCUDF_ENV_PREFIX=$CONDA_PREFIX
-    echo "✓ LIBCUDF_ENV_PREFIX set to $CONDA_PREFIX"
-else
-    echo "✓ LIBCUDF_ENV_PREFIX already set: $LIBCUDF_ENV_PREFIX"
-    # Verify it matches current conda prefix
-    if [ "$LIBCUDF_ENV_PREFIX" != "$CONDA_PREFIX" ]; then
-        echo "  ⚠ Note: LIBCUDF_ENV_PREFIX ($LIBCUDF_ENV_PREFIX) differs from CONDA_PREFIX ($CONDA_PREFIX)"
-        echo "  Using existing LIBCUDF_ENV_PREFIX value"
-    fi
-fi
+export LIBCUDF_ENV_PREFIX=$CONDA_PREFIX
+echo "✓ LIBCUDF_ENV_PREFIX set to $CONDA_PREFIX"
 
 # Ensure CUDA paths are set (common on AWS GPU instances)
 if [ -d "/usr/local/cuda" ]; then
