@@ -271,7 +271,7 @@ def run_sirius_benchmark(dataset_size, query_name, num_runs=3, mode='cold_start'
     print(f"\n  Running Sirius (GPU): {query_name} on {dataset_size} dataset (mode: {mode})...", flush=True)
 
     # Check if Sirius binary exists
-    sirius_binary = os.path.expanduser("~/crypto-analysis/sirius/build/release/duckdb")
+    sirius_binary = os.path.expanduser("../sirius/build/release/duckdb")
     if not os.path.exists(sirius_binary):
         print(f"  ✗ Sirius binary not found at: {sirius_binary}")
         return {
