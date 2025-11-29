@@ -145,7 +145,16 @@ echo ""
 # ==========================================
 echo "Step 4/6: Checking Miniconda..."
 
-if ! command -v conda &> /dev/null; then
+if [ -d "$HOME/miniconda3" ]; then
+    echo "✓ Miniconda directory exists at $HOME/miniconda3"
+    # Make sure conda is initialized
+    if ! command -v conda &> /dev/null; then
+        echo "Initializing conda for current shell..."
+        $HOME/miniconda3/bin/conda init bash
+        source ~/.bashrc
+    fi
+    echo "✓ Miniconda version: $($HOME/miniconda3/bin/conda --version)"
+elif ! command -v conda &> /dev/null; then
     echo "Installing Miniconda..."
     cd ~
     wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
@@ -157,7 +166,7 @@ if ! command -v conda &> /dev/null; then
     source ~/.bashrc
     echo "✓ Miniconda installed"
 else
-    echo "✓ Miniconda already installed: $(conda --version)"
+    echo "✓ Miniconda already available: $(conda --version)"
 fi
 echo ""
 
