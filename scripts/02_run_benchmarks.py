@@ -50,13 +50,14 @@ def load_sql_query(db_type, query_name):
     Load SQL query from file.
 
     Args:
-        db_type: 'duckdb' or 'sirius'
+        db_type: 'duckdb' or 'sirius' (not used, queries are unified)
         query_name: e.g., '1_hop', '2_hop', 'k_hop', 'shortest_path'
 
     Returns:
         SQL query string
     """
-    query_path = f"sql/{db_type}/{query_name}.sql"
+    # All queries are now in sql/queries/ - they work on both DuckDB and Sirius
+    query_path = f"sql/queries/{query_name}.sql"
 
     if not os.path.exists(query_path):
         print(f"⚠ Warning: Query file not found: {query_path}")
@@ -80,7 +81,7 @@ def run_duckdb_benchmark(dataset_size, query_name, num_runs=3, mode='cold_start'
     Returns:
         Dictionary with benchmark results
     """
-    print(f"\n  Running DuckDB: {query_name} on {dataset_size} dataset (mode: {mode})...", flush=True)
+    print(f"\n  Running DuckDB (CPU): {query_name} on {dataset_size} dataset (mode: {mode})...", flush=True)
 
     # Load query
     query = load_sql_query('duckdb', query_name)
@@ -186,8 +187,9 @@ def run_duckdb_benchmark(dataset_size, query_name, num_runs=3, mode='cold_start'
         conn.execute(f"CREATE TABLE edges AS SELECT * FROM read_csv_auto('{edges_file}')")
         init_time = time.time() - init_start
 
-        # Warm-up run (discarded)
-        conn.execute(query).fetchall()
+        # Warm-up run (discarded) - also capture row count
+        warmup_result = conn.execute(query).fetchall()
+        row_count = len(warmup_result)
 
         # Run many queries in sequence
         session_start = time.time()
@@ -205,7 +207,7 @@ def run_duckdb_benchmark(dataset_size, query_name, num_runs=3, mode='cold_start'
         avg_query_time = session_time / session_queries
         total_time = init_time + session_time
 
-        print(f"  ✓ Init: {init_time:.4f}s | {session_queries} queries: {session_time:.4f}s | Avg per query: {avg_query_time:.4f}s", flush=True)
+        print(f"  ✓ Init: {init_time:.4f}s | {session_queries} queries: {session_time:.4f}s | Avg per query: {avg_query_time:.4f}s | {row_count} rows", flush=True)
 
         return {
             'database': 'duckdb',
@@ -217,7 +219,8 @@ def run_duckdb_benchmark(dataset_size, query_name, num_runs=3, mode='cold_start'
             'avg_query_time': avg_query_time,
             'total_time': total_time,
             'num_queries': session_queries,
-            'amortized_time_per_query': total_time / session_queries
+            'amortized_time_per_query': total_time / session_queries,
+            'result_row_count': row_count
         }
 
 
@@ -265,7 +268,7 @@ def run_sirius_benchmark(dataset_size, query_name, num_runs=3, mode='cold_start'
     Returns:
         Dictionary with benchmark results
     """
-    print(f"\n  Running Sirius: {query_name} on {dataset_size} dataset (mode: {mode})...", flush=True)
+    print(f"\n  Running Sirius (GPU): {query_name} on {dataset_size} dataset (mode: {mode})...", flush=True)
 
     # Check if Sirius binary exists
     sirius_binary = os.path.expanduser("~/crypto-transaction-analysis/sirius/build/release/duckdb")
@@ -475,6 +478,18 @@ call gpu_processing('{clean_query.replace("'", "''")}');
         # Persistent session: Initialize once, run many queries
         gpu_stats_before = get_gpu_stats()
 
+        # Get row count using DuckDB (for validation - same query should return same rows)
+        try:
+            import duckdb
+            temp_conn = duckdb.connect(':memory:')
+            temp_conn.execute(f"CREATE TABLE nodes AS SELECT * FROM read_csv_auto('{nodes_file}')")
+            temp_conn.execute(f"CREATE TABLE edges AS SELECT * FROM read_csv_auto('{edges_file}')")
+            row_count = len(temp_conn.execute(query).fetchall())
+            temp_conn.close()
+        except Exception as e:
+            row_count = None
+            print(f"  Warning: Could not get row count: {e}")
+
         # Create session script
         session_script = f"""
 -- Load data
@@ -520,7 +535,10 @@ call gpu_processing('{clean_query.replace("'", "''")}');
             avg_query_time = session_time / (session_queries + 1)  # +1 for warmup
             amortized_time = total_time / session_queries
 
-            print(f"  ✓ Total: {total_time:.4f}s | {session_queries} queries | Avg: {avg_query_time:.4f}s | Amortized: {amortized_time:.4f}s")
+            if row_count is not None:
+                print(f"  ✓ Total: {total_time:.4f}s | {session_queries} queries | Avg: {avg_query_time:.4f}s | Amortized: {amortized_time:.4f}s | {row_count} rows")
+            else:
+                print(f"  ✓ Total: {total_time:.4f}s | {session_queries} queries | Avg: {avg_query_time:.4f}s | Amortized: {amortized_time:.4f}s")
 
         except subprocess.TimeoutExpired:
             print(f"  ✗ Session timed out")
@@ -548,6 +566,9 @@ call gpu_processing('{clean_query.replace("'", "''")}');
             'buffer_size_max': buffer_max,
             'note': 'Query timing estimated from total time'
         }
+
+        if row_count is not None:
+            result_dict['result_row_count'] = row_count
 
         if gpu_stats_after:
             result_dict['gpu_memory_used_mb'] = gpu_stats_after['gpu_memory_used_mb']

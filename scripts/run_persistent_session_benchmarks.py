@@ -43,9 +43,8 @@ run_sirius_benchmark = run_benchmarks.run_sirius_benchmark
 
 # Test configuration
 DATASET_SIZES = ['100k', '1m', '5m', '20m']
-# Only verified GPU-compatible queries (k_hop and shortest_path use UNION ALL which causes CPU fallback)
-GPU_QUERIES = ['1_hop_gpu', '2_hop_gpu', '3_hop_gpu']
-# GPU_QUERIES = ['1_hop_gpu', '2_hop_gpu', '3_hop_gpu', 'k_hop_gpu', 'shortest_path_gpu']
+# All GPU queries including k_hop and shortest_path (which use UNION ALL with partial fallback)
+GPU_QUERIES = ['1_hop', '2_hop', '3_hop', 'k_hop', 'shortest_path']
 DEFAULT_SESSION_QUERIES = 100
 
 def ensure_dataset_exists(dataset_size):

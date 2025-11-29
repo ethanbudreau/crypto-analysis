@@ -41,7 +41,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
         fi
     else
         # Full setup with Sirius
-        bash setup/setup_sirius.sh
+        bash setup/setup_sirius_complete.sh
         echo ""
         echo "✓ Full setup complete (DuckDB + Sirius)"
     fi
@@ -61,9 +61,8 @@ echo "Quick reference:"
 echo "  - Activate environment: source venv/bin/activate"
 echo "                      OR: conda activate crypto-analysis (if using Sirius)"
 echo "  - Prepare data: python scripts/01_prepare_data.py"
-echo "  - Run benchmarks: python scripts/02_run_benchmarks.py"
+echo "  - Run benchmarks: python scripts/run_persistent_session_benchmarks.py"
 echo "  - Visualize results: python scripts/03_visualize.py"
-echo "  - Run everything: bash run_all.sh"
 echo ""
 echo "For detailed instructions, see SETUP.md"
 echo ""

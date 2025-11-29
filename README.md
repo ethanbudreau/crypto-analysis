@@ -91,8 +91,8 @@ source venv/bin/activate  # For DuckDB-only
 # OR
 conda activate crypto-analysis  # For full setup with Sirius
 
-# 4. Run the full pipeline
-bash run_all.sh
+# 4. Run benchmarks
+python scripts/run_persistent_session_benchmarks.py
 ```
 
 See [SETUP.md](SETUP.md) for detailed installation instructions.
@@ -105,7 +105,7 @@ crypto-transaction-analysis/
 │   ├── quick_start.sh      # One-command setup
 │   ├── check_requirements.sh
 │   ├── setup_duckdb.sh
-│   └── setup_sirius.sh
+│   └── setup_sirius_complete.sh
 │
 ├── data/
 │   ├── raw/                # Original Elliptic dataset
@@ -124,8 +124,7 @@ crypto-transaction-analysis/
 │
 ├── adhoc_tests/            # Ad-hoc SQL test files
 ├── notebooks/              # Jupyter notebooks for exploration
-├── results/                # Benchmark outputs and CSV data
-└── run_all.sh              # Master pipeline script
+└── results/                # Benchmark outputs and CSV data
 ```
 
 ## System Requirements
@@ -168,10 +167,18 @@ python scripts/run_persistent_session_benchmarks.py --db sirius
 python scripts/03_visualize.py
 ```
 
-### Full Pipeline
+### Full Benchmark Suite
 
 ```bash
-bash run_all.sh
+# Run all benchmarks with persistent sessions (100 queries each)
+python scripts/run_persistent_session_benchmarks.py
+
+# Or run specific database only
+python scripts/run_persistent_session_benchmarks.py --db duckdb
+python scripts/run_persistent_session_benchmarks.py --db sirius
+
+# Quick test mode (10 queries per session)
+python scripts/run_persistent_session_benchmarks.py --quick
 ```
 
 ### Interactive Exploration
@@ -183,28 +190,27 @@ jupyter notebook
 
 ## Query Types
 
-All queries are defined in SQL files under `sql/` directory:
+All queries are defined in SQL files under `sql/queries/` directory:
 
-### GPU-Accelerated Queries (Benchmarked)
+### GPU-Accelerated Queries (All Benchmarked)
 
-1. **1-hop Reachability** (`sql/*/1_hop_gpu.sql`)
+1. **1-hop Reachability** (`sql/queries/1_hop.sql`)
    - Find transactions directly connected to known illicit nodes
 
-2. **2-hop Reachability** (`sql/*/2_hop_gpu.sql`)
+2. **2-hop Reachability** (`sql/queries/2_hop.sql`)
    - Find transactions 2 steps away from illicit activity
 
-3. **3-hop Reachability** (`sql/*/3_hop_gpu.sql`)
+3. **3-hop Reachability** (`sql/queries/3_hop.sql`)
    - Find transactions 3 steps away from illicit activity
 
-### CPU-Only Queries (Not Currently Benchmarked)
+4. **k-hop Traversal** (`sql/queries/k_hop.sql`)
+   - Multi-step relationship exploration (1-4 hops)
+   - ⚠️ Uses UNION ALL - causes partial CPU fallback in Sirius (JOINs on GPU, UNION on CPU)
 
-4. **k-hop Traversal** (`sql/*/k_hop.sql`, `sql/*/k_hop_gpu.sql`)
-   - Multi-step relationship exploration (variable k hops)
-   - ⚠️ Uses UNION ALL - causes CPU fallback in Sirius
-
-5. **Shortest Path** (`sql/*/shortest_path.sql`, `sql/*/shortest_path_gpu.sql`)
-   - Compute distance to nearest illicit node
-   - ⚠️ Uses UNION ALL - causes CPU fallback in Sirius
+5. **Shortest Path** (`sql/queries/shortest_path.sql`)
+   - Compute distance to nearest illicit node (up to 5 hops)
+   - ⚠️ Uses UNION ALL - causes partial CPU fallback in Sirius (JOINs on GPU, UNION on CPU)
+   - **Coverage:** Graph analysis on 100k dataset shows this query captures 98.2% of all reachable nodes (2,642 of 2,690). Only 2.7% of nodes are reachable from illicit transactions (97.3% are in disconnected components). Maximum graph distance is 21 hops.
 
 ## Benchmarking
 
