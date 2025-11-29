@@ -22,33 +22,59 @@ Using the **Elliptic Bitcoin Transaction Dataset** (203K+ nodes, 234K+ edges), w
 
 ### 🎯 Key Findings
 
-**DuckDB outperforms Sirius across all tested scenarios** on datasets ranging from 10K to 1M edges:
+**GPU acceleration provides up to 10.6x speedup** on large datasets for complex graph traversal queries:
 
-#### Full Elliptic Dataset (234K edges, 203K nodes)
+#### Performance by Dataset Size
 
-| Query | DuckDB | Sirius | Speedup |
-|-------|--------|--------|---------|
-| 1_hop | **0.011s** | 4.16s | **372x faster** |
-| 2_hop | **0.019s** | 3.32s | **178x faster** |
-| k_hop | **0.043s** | 3.92s | **91x faster** |
-| shortest_path | **0.053s** | 3.92s | **74x faster** |
+**20M Edge Dataset** (⭐ Peak GPU Performance)
+| Query | DuckDB (CPU) | Sirius (GPU) | GPU Speedup |
+|-------|--------------|--------------|-------------|
+| 1_hop | 69.31 ms | 47.51 ms | 1.46x faster |
+| 2_hop | 461.34 ms | **49.80 ms** | **9.26x faster** ⭐ |
+| 3_hop | 476.59 ms | **45.06 ms** | **10.58x faster** ⭐ |
 
-**Average**: DuckDB is **179x faster** than Sirius on the full Elliptic dataset.
+**5M Edge Dataset** (GPU Crossover Point)
+| Query | DuckDB (CPU) | Sirius (GPU) | GPU Speedup |
+|-------|--------------|--------------|-------------|
+| 1_hop | 21.17 ms | 44.60 ms | 0.47x (CPU wins) |
+| 2_hop | 108.60 ms | **38.48 ms** | **2.82x faster** |
+| 3_hop | 104.84 ms | **40.33 ms** | **2.60x faster** |
 
-#### 1M Edge Dataset (synthetic, 4.3x larger)
+**1M Edge Dataset** (Mixed Results)
+| Query | DuckDB (CPU) | Sirius (GPU) | Result |
+|-------|--------------|--------------|--------|
+| 1_hop | 9.89 ms | 15.37 ms | CPU 1.55x faster |
+| 2_hop | 22.44 ms | **13.01 ms** | GPU 1.72x faster |
+| 3_hop | 27.07 ms | **17.11 ms** | GPU 1.58x faster |
 
-| Query | DuckDB | Sirius | Speedup |
-|-------|--------|--------|---------|
-| 1_hop | **0.016s** | 2.93s | **186x faster** |
-| 2_hop | **0.059s** | 3.57s | **61x faster** |
-| k_hop | **0.039s** | 3.89s | **100x faster** |
-| shortest_path | **0.097s** | 2.81s | **29x faster** |
+**100k Edge Dataset** (CPU Wins on Simple Queries)
+| Query | DuckDB (CPU) | Sirius (GPU) | Result |
+|-------|--------------|--------------|--------|
+| 1_hop | **5.27 ms** | 9.90 ms | CPU 1.88x faster |
+| 2_hop | 10.24 ms | **7.02 ms** | GPU 1.46x faster |
+| 3_hop | 12.23 ms | **7.21 ms** | GPU 1.70x faster |
 
-**Average**: DuckDB is **94x faster** than Sirius on 1M edges.
+#### Key Insights
 
-**Conclusion**: For graph queries on datasets under ~10M edges, CPU-optimized databases provide superior performance due to GPU initialization and data transfer overhead. GPU advantages would emerge at 50M+ edges or with persistent GPU sessions.
+1. **GPU wins at scale**: 10x speedup on 20M datasets for multi-hop traversal
+2. **Crossover point**: GPU becomes advantageous around 5M edges for complex queries
+3. **Query complexity matters**: 2-hop and 3-hop queries benefit more from GPU than 1-hop
+4. **Initialization overhead**: GPU has overhead that impacts small datasets
 
-See [BENCHMARK_FINDINGS.md](BENCHMARK_FINDINGS.md) for complete analysis.
+#### GPU Compatibility
+
+✅ **GPU-accelerated queries**: `1_hop_gpu`, `2_hop_gpu`, `3_hop_gpu`
+
+❌ **CPU fallback** (UNION ALL not GPU-compatible):
+- `k_hop_gpu` - Variable k-hop traversal
+- `shortest_path_gpu` - Shortest path analysis
+
+**Overall Performance:**
+- **Sirius average**: 28.0 ms per query (24 tests)
+- **DuckDB average**: 110.7 ms per query (24 tests)
+- **Overall GPU advantage**: 3.95x speedup
+
+> 📊 **Methodology**: All benchmarks use persistent session mode (100 queries per session) to amortize initialization overhead and measure true query execution performance. See [VERIFIED_GPU_BENCHMARK_RESULTS.md](VERIFIED_GPU_BENCHMARK_RESULTS.md) for detailed analysis.
 
 ## Quick Start
 
@@ -65,8 +91,8 @@ source venv/bin/activate  # For DuckDB-only
 # OR
 conda activate crypto-analysis  # For full setup with Sirius
 
-# 4. Run the full pipeline
-bash run_all.sh
+# 4. Run benchmarks
+python scripts/run_persistent_session_benchmarks.py
 ```
 
 See [SETUP.md](SETUP.md) for detailed installation instructions.
@@ -76,27 +102,29 @@ See [SETUP.md](SETUP.md) for detailed installation instructions.
 ```
 crypto-transaction-analysis/
 ├── setup/                  # Automated setup scripts
-│   ├── quick_start.sh      # One-command setup for team
+│   ├── quick_start.sh      # One-command setup
 │   ├── check_requirements.sh
 │   ├── setup_duckdb.sh
-│   └── setup_sirius.sh
+│   └── setup_sirius_complete.sh
 │
 ├── data/
 │   ├── raw/                # Original Elliptic dataset
-│   └── processed/          # Cleaned subsets (10K, 50K, 100K, 200K)
+│   └── processed/          # Processed datasets (100K, 1M, 5M, 20M edges)
 │
 ├── sql/                    # SQL query definitions
 │   ├── duckdb/             # CPU-based queries
 │   └── sirius/             # GPU-accelerated queries
 │
 ├── scripts/                # Python automation scripts
-│   ├── 01_prepare_data.py      # Dataset preprocessing
-│   ├── 02_run_benchmarks.py    # Benchmark execution
-│   └── 03_visualize.py         # Results visualization
+│   ├── 01_prepare_data.py                    # Dataset preprocessing
+│   ├── 02_run_benchmarks.py                  # Core benchmark functions
+│   ├── 03_visualize.py                       # Results visualization
+│   ├── run_persistent_session_benchmarks.py  # Main benchmark runner
+│   └── create_slim_datasets.py               # Dataset optimization
 │
+├── adhoc_tests/            # Ad-hoc SQL test files
 ├── notebooks/              # Jupyter notebooks for exploration
-├── results/                # Benchmark outputs and figures
-└── run_all.sh              # Master pipeline script
+└── results/                # Benchmark outputs and CSV data
 ```
 
 ## System Requirements
@@ -125,17 +153,32 @@ crypto-transaction-analysis/
 # 2. Prepare dataset (extract & preprocess)
 python scripts/01_prepare_data.py
 
-# 2. Run benchmarks
-python scripts/02_run_benchmarks.py
+# 3. Run benchmarks
+# Full benchmark suite (recommended)
+python scripts/run_persistent_session_benchmarks.py --db both
 
-# 3. Generate visualizations
+# Quick test (10 queries per session)
+python scripts/run_persistent_session_benchmarks.py --quick
+
+# Specific database only
+python scripts/run_persistent_session_benchmarks.py --db sirius
+
+# 4. Generate visualizations
 python scripts/03_visualize.py
 ```
 
-### Full Pipeline
+### Full Benchmark Suite
 
 ```bash
-bash run_all.sh
+# Run all benchmarks with persistent sessions (100 queries each)
+python scripts/run_persistent_session_benchmarks.py
+
+# Or run specific database only
+python scripts/run_persistent_session_benchmarks.py --db duckdb
+python scripts/run_persistent_session_benchmarks.py --db sirius
+
+# Quick test mode (10 queries per session)
+python scripts/run_persistent_session_benchmarks.py --quick
 ```
 
 ### Interactive Exploration
@@ -147,40 +190,40 @@ jupyter notebook
 
 ## Query Types
 
-All queries are defined in SQL files under `sql/` directory:
+All queries are defined in SQL files under `sql/queries/` directory:
 
-1. **1-hop Reachability** (`sql/*/1_hop.sql`)
+### GPU-Accelerated Queries (All Benchmarked)
+
+1. **1-hop Reachability** (`sql/queries/1_hop.sql`)
    - Find transactions directly connected to known illicit nodes
 
-2. **2-hop Reachability** (`sql/*/2_hop.sql`)
+2. **2-hop Reachability** (`sql/queries/2_hop.sql`)
    - Find transactions 2 steps away from illicit activity
 
-3. **k-hop Traversal** (`sql/*/k_hop.sql`)
-   - Multi-step relationship exploration (3-4 hops)
+3. **3-hop Reachability** (`sql/queries/3_hop.sql`)
+   - Find transactions 3 steps away from illicit activity
 
-4. **Shortest Path** (`sql/*/shortest_path.sql`)
-   - Compute distance to nearest illicit node
+4. **k-hop Traversal** (`sql/queries/k_hop.sql`)
+   - Multi-step relationship exploration (1-4 hops)
+   - ⚠️ Uses UNION ALL - causes partial CPU fallback in Sirius (JOINs on GPU, UNION on CPU)
+
+5. **Shortest Path** (`sql/queries/shortest_path.sql`)
+   - Compute distance to nearest illicit node (up to 5 hops)
+   - ⚠️ Uses UNION ALL - causes partial CPU fallback in Sirius (JOINs on GPU, UNION on CPU)
+   - **Coverage:** Graph analysis on 100k dataset shows this query captures 98.2% of all reachable nodes (2,642 of 2,690). Only 2.7% of nodes are reachable from illicit transactions (97.3% are in disconnected components). Maximum graph distance is 21 hops.
 
 ## Benchmarking
 
 The benchmark suite measures:
-- **Query execution time** (multiple runs for statistical validity)
+- **Query execution time** (persistent session with 100 queries per test)
 - **Memory/VRAM usage**
 - **CPU/GPU utilization**
 
 Results are scaled across dataset sizes:
-- 10K nodes (testing)
-- 50K nodes
-- 100K nodes
-- 200K+ nodes (full dataset)
-
-## Expected Outcomes
-
-We hypothesize that:
-- GPU acceleration will provide significant speedup on multi-hop and path queries
-- Simple 1-hop queries may show diminishing returns
-- Performance advantages will emerge at larger graph sizes
-- Some queries may fall back to CPU execution
+- 100K edges
+- 1M edges
+- 5M edges
+- 20M edges
 
 ## Technology Stack
 
@@ -227,9 +270,11 @@ See [project-proposal.txt](project-proposal.txt) for full academic references in
 
 ## Documentation
 
-- **[SETUP.md](SETUP.md)** - Detailed installation instructions
-- **[project-proposal.txt](project-proposal.txt)** - Full research proposal
-- **SQL files** - Query documentation and implementations
+- **[README.md](README.md)** - This file: project overview and key findings
+- **[VERIFIED_GPU_BENCHMARK_RESULTS.md](VERIFIED_GPU_BENCHMARK_RESULTS.md)** - Detailed performance analysis
+- **[CURRENT_STATUS.md](CURRENT_STATUS.md)** - Project status and reproducibility guide
+- **[SETUP.md](SETUP.md)** - Installation instructions
+- **[project-proposal.txt](project-proposal.txt)** - Research proposal and references
 
 ## Troubleshooting
 

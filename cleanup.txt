@@ -1,0 +1,43 @@
+  Consider removing - Let's go ahead and remove these. They are in the git history, so we can find them if we need to.
+  - 5M_DATASET_ANALYSIS.md - interim analysis
+  - BENCHMARK_MODES.md - now documented in final results
+  - CORRECTED_ANALYSIS.md - interim corrections
+  - CORRECTED_FINAL_RESULTS.md - superseded by verified results
+  - CRITICAL_BENCHMARK_ISSUES.md - issues now resolved
+  - ENHANCEMENTS_SUMMARY.md - enhancements now integrated
+  - FINAL_COMPREHENSIVE_ANALYSIS.md - interim final analysis
+  - FINAL_CORRECTED_RESULTS.md - superseded by verified results
+  - FIRST_REAL_GPU_RESULTS.md - superseded by verified results
+  - GPU_LIMITATIONS_FOUND.md - now in CURRENT_STATUS.md
+  - INVESTIGATION_SUMMARY.md - findings now in final docs
+
+  2. Test SQL Files (Move or Remove)
+  Root directory has 5 test SQL files that should either be moved to a test directory or removed:
+
+  Let's also move these to an adhoc testing folder, but I think we can commit these. They could be useful in the future.
+  - test_fallback_causes.sql
+  - test_gpu_compatible.sql
+  - test_simple_gpu.sql
+  - test_sirius_output.sql
+  - test_sirius_timing.sql
+
+  3. Redundant/Outdated Scripts (Review)
+
+  - scripts/inflate_dataset.py vs scripts/inflate_slim_dataset.py - likely one is outdated
+        - I think both of these are useful, so let's not do anything here.
+  - scripts/run_verified_benchmarks.py - appears to be interim, possibly superseded by run_persistent_session_benchmarks.py
+        - I'm not sure on this - can you review these more closely to see what we should do?
+
+  4. Outdated Setup/Status Docs (Review or Remove)
+  Let's remove these
+
+  - SETUP_COMPLETE.md - from Oct 22, may be outdated
+  - SIRIUS_SETUP_STATUS.md - from Oct 24, may be outdated
+  - BENCHMARK_FINDINGS.md - from Oct 24, before corrected results
+
+  5. Keep These Files (Current & Essential)
+
+  - README.md - current overview with latest results
+  - CURRENT_STATUS.md - up-to-date status
+  - VERIFIED_GPU_BENCHMARK_RESULTS.md - final results
+  - SETUP.md - setup instructions

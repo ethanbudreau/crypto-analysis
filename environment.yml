@@ -6,7 +6,7 @@ channels:
 dependencies:
   - python=3.10
   - pip
-  - rapidsai::libcudf=25.04
+  - rapidsai::libcudf=25.10
   - pip:
     - duckdb>=1.4.0
     - pandas>=2.0.0

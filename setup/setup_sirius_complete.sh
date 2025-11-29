@@ -89,7 +89,30 @@ echo ""
 # ==========================================
 # Step 3: Fix GCC Compatibility
 # ==========================================
-echo "Step 3/6: Checking GCC compatibility for CUDA..."
+echo "Step 3/6: Checking CUDA Toolkit..."
+
+if ! command -v nvcc &> /dev/null; then
+    echo "Installing CUDA Toolkit..."
+    sudo apt-get update
+    sudo apt-get install -y nvidia-cuda-toolkit
+
+    # Add CUDA to PATH
+    if ! grep -q "cuda/bin" ~/.bashrc; then
+        echo "" >> ~/.bashrc
+        echo "# CUDA Toolkit paths" >> ~/.bashrc
+        echo 'export PATH=/usr/local/cuda/bin:$PATH' >> ~/.bashrc
+        echo 'export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+    fi
+    echo "✓ CUDA Toolkit installed"
+else
+    CUDA_VERSION=$(nvcc --version | grep release | awk '{print $6}' | cut -d',' -f1)
+    echo "✓ CUDA Toolkit already installed: $CUDA_VERSION"
+fi
+
+# Ensure CUDA paths are set for current session
+export PATH=/usr/local/cuda/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+export CUDA_HOME=/usr/local/cuda
 
 # Install GCC 12 for CUDA compatibility
 GCC_VERSION=$(gcc --version | head -n 1 | grep -oP '\d+\.\d+' | head -n 1)
@@ -124,7 +147,16 @@ echo ""
 # ==========================================
 echo "Step 4/6: Checking Miniconda..."
 
-if ! command -v conda &> /dev/null; then
+if [ -d "$HOME/miniconda3" ]; then
+    echo "✓ Miniconda directory exists at $HOME/miniconda3"
+    # Make sure conda is initialized
+    if ! command -v conda &> /dev/null; then
+        echo "Initializing conda for current shell..."
+        $HOME/miniconda3/bin/conda init bash
+        source ~/.bashrc
+    fi
+    echo "✓ Miniconda version: $($HOME/miniconda3/bin/conda --version)"
+elif ! command -v conda &> /dev/null; then
     echo "Installing Miniconda..."
     cd ~
     wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
@@ -136,8 +168,14 @@ if ! command -v conda &> /dev/null; then
     source ~/.bashrc
     echo "✓ Miniconda installed"
 else
-    echo "✓ Miniconda already installed: $(conda --version)"
+    echo "✓ Miniconda already available: $(conda --version)"
 fi
+
+# Accept conda Terms of Service
+echo "Accepting conda Terms of Service..."
+$HOME/miniconda3/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main 2>/dev/null || true
+$HOME/miniconda3/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r 2>/dev/null || true
+echo "✓ Conda TOS accepted"
 echo ""
 
 # ==========================================
@@ -148,7 +186,8 @@ echo "Step 5/6: Creating conda environment..."
 # Make sure we're in the project directory
 cd ~/crypto-transaction-analysis
 
-source $(conda info --base)/etc/profile.d/conda.sh
+# Source conda directly from known location
+source $HOME/miniconda3/etc/profile.d/conda.sh
 
 if conda env list | grep -q "crypto-analysis"; then
     echo "✓ Environment 'crypto-analysis' already exists"
@@ -199,6 +238,7 @@ export SIRIUS_HOME_PATH=$(pwd)
 export LDFLAGS="-Wl,-rpath,$CONDA_PREFIX/lib -L$CONDA_PREFIX/lib $LDFLAGS"
 export PATH=/usr/local/cuda/bin:$PATH
 export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+export CUDA_HOME=/usr/local/cuda
 
 # Initialize submodules
 echo "Initializing git submodules..."

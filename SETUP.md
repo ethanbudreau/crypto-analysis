@@ -345,15 +345,19 @@ Once setup is complete:
    python scripts/02_run_benchmarks.py
    ```
 
-3. **Visualize Results:**
+3. **Run Benchmarks:**
+   ```bash
+   # Full benchmark suite (recommended)
+   python scripts/run_persistent_session_benchmarks.py
+
+   # Or quick test mode
+   python scripts/run_persistent_session_benchmarks.py --quick
+   ```
+
+4. **Visualize Results:**
    ```bash
    python scripts/03_visualize.py
    ```
-
-Or run everything at once:
-```bash
-bash run_all.sh
-```
 
 ---
 
