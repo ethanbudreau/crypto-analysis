@@ -178,7 +178,8 @@ echo "Step 5/6: Creating conda environment..."
 # Make sure we're in the project directory
 cd ~/crypto-transaction-analysis
 
-source $(conda info --base)/etc/profile.d/conda.sh
+# Source conda directly from known location
+source $HOME/miniconda3/etc/profile.d/conda.sh
 
 if conda env list | grep -q "crypto-analysis"; then
     echo "✓ Environment 'crypto-analysis' already exists"
