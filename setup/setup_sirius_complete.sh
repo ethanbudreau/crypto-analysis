@@ -270,6 +270,17 @@ if [ -d "build" ]; then
     rm -rf build
 fi
 
+# Detect GPU compute capability and set CUDA architecture
+echo "Detecting GPU compute capability..."
+GPU_COMPUTE_CAP=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -n 1 | tr -d '.')
+if [ -n "$GPU_COMPUTE_CAP" ]; then
+    echo "✓ GPU Compute Capability: sm_${GPU_COMPUTE_CAP}"
+    export CMAKE_CUDA_ARCHITECTURES="$GPU_COMPUTE_CAP"
+    echo "✓ Set CMAKE_CUDA_ARCHITECTURES=${GPU_COMPUTE_CAP}"
+else
+    echo "⚠ Warning: Could not detect GPU compute capability, using default"
+fi
+
 # Build Sirius
 NPROC=$(nproc)
 echo "Building Sirius with $NPROC cores (this takes 10-30 minutes)..."

@@ -3,8 +3,8 @@
 Data Preparation Script
 Downloads and preprocesses the Elliptic Bitcoin Transaction Dataset.
 
-Creates subsets of 10K, 50K, 100K, and 200K nodes for scalability testing.
-Converts data to formats compatible with both DuckDB and Sirius.
+Creates slim datasets (100K, 1M, 5M, 20M edges) optimized for benchmarking.
+Only keeps required columns: nodes (txId, class), edges (txId1, txId2).
 
 Usage:
     python scripts/01_prepare_data.py
@@ -142,100 +142,168 @@ def load_raw_data():
 def preprocess_data(features, classes, edges):
     """
     Clean and preprocess the dataset.
-
-    TODO: Implement preprocessing logic
-    - Merge features with labels
-    - Handle unknown labels
-    - Create graph representation
-    - Validate data integrity
+    Keep only required columns for slim format.
     """
     print("\nPreprocessing data...")
 
-    # Example preprocessing (to be implemented)
     # Rename first column to 'txId'
     features.rename(columns={0: 'txId'}, inplace=True)
 
-    # Merge with classes
-    data = features.merge(classes, left_on='txId', right_on='txId', how='left')
+    # Merge with classes - keep only txId and class
+    data = features[['txId']].merge(classes, left_on='txId', right_on='txId', how='left')
 
     print(f"✓ Merged features and labels: {len(data)} nodes")
     print(f"  - Illicit: {(data['class'] == '1').sum()}")
     print(f"  - Licit: {(data['class'] == '2').sum()}")
     print(f"  - Unknown: {data['class'].isna().sum()}")
 
+    # Convert class labels to readable format
+    data['class'] = data['class'].replace({'1': 'illicit', '2': 'licit'})
+    data['class'] = data['class'].fillna('unknown')
+
     return data, edges
 
 
-def create_subsets(data, edges, sizes=[10000, 50000, 100000, None]):
+def create_base_subset(nodes, edges, target_edges=100000):
     """
-    Create subsets of different sizes for scalability testing.
+    Create base 100k subset for further inflation.
 
     Args:
-        data: Node features and labels
+        nodes: Node features and labels
         edges: Edge list
-        sizes: List of subset sizes (None = full dataset)
+        target_edges: Target number of edges (default: 100k)
 
-    TODO: Implement subset creation
-    - Sample nodes strategically (preserve illicit nodes)
-    - Extract corresponding edges
-    - Save to processed directory
+    Returns:
+        Subset of nodes and edges
     """
-    print("\nCreating dataset subsets...")
+    print(f"\nCreating base subset ({target_edges:,} edges)...")
 
-    for size in sizes:
-        if size is None:
-            subset_name = "full"
-            subset_data = data
-            subset_edges = edges
-        else:
-            subset_name = f"{size//1000}k"
-            # TODO: Implement smart sampling
-            # For now, just take first N rows
-            subset_data = data.head(size)
-            node_ids = set(subset_data['txId'])
-            subset_edges = edges[
-                edges['txId1'].isin(node_ids) & edges['txId2'].isin(node_ids)
-            ]
+    # Sample edges
+    if len(edges) > target_edges:
+        subset_edges = edges.sample(n=target_edges, random_state=42).reset_index(drop=True)
+    else:
+        subset_edges = edges
 
-        print(f"\n{subset_name} dataset:")
-        print(f"  - Nodes: {len(subset_data)}")
-        print(f"  - Edges: {len(subset_edges)}")
+    # Get unique node IDs from sampled edges
+    node_ids = set(subset_edges['txId1']).union(set(subset_edges['txId2']))
 
-        # Save subsets
-        subset_data.to_csv(f"data/processed/nodes_{subset_name}.csv", index=False)
-        subset_edges.to_csv(f"data/processed/edges_{subset_name}.csv", index=False)
-        print(f"  ✓ Saved to data/processed/")
+    # Filter nodes
+    subset_nodes = nodes[nodes['txId'].isin(node_ids)].reset_index(drop=True)
+
+    print(f"  ✓ Nodes: {len(subset_nodes):,}")
+    print(f"  ✓ Edges: {len(subset_edges):,}")
+
+    return subset_nodes, subset_edges
 
 
-def convert_to_duckdb_format():
+def inflate_dataset(nodes, edges, target_edges, suffix):
     """
-    Convert processed data to DuckDB-optimized format.
+    Inflate dataset to target number of edges.
 
-    TODO: Implement DuckDB format conversion
-    - Create Parquet files for efficient loading
-    - Optimize column types
-    - Create indices if needed
+    Args:
+        nodes: Original nodes DataFrame (txId, class)
+        edges: Original edges DataFrame (txId1, txId2)
+        target_edges: Target number of edges
+        suffix: Output file suffix
     """
-    print("\nConverting to DuckDB format...")
-    print("TODO: Implement Parquet conversion")
+    original_edge_count = len(edges)
+    original_node_count = len(nodes)
+
+    # Calculate replication factor
+    replication_factor = int(np.ceil(target_edges / original_edge_count))
+
+    print(f"\nInflating to {target_edges:,} edges ({suffix}):")
+    print(f"  Replication factor: {replication_factor}x")
+
+    # Replicate the graph multiple times with offset IDs
+    inflated_nodes_list = []
+    inflated_edges_list = []
+
+    for i in range(replication_factor):
+        # Offset node IDs
+        node_offset = i * original_node_count * 10  # Large offset to avoid collisions
+
+        # Copy nodes with offset IDs
+        nodes_copy = nodes.copy()
+        nodes_copy['txId'] = nodes_copy['txId'] + node_offset
+        inflated_nodes_list.append(nodes_copy)
+
+        # Copy edges with offset IDs
+        edges_copy = edges.copy()
+        edges_copy['txId1'] = edges_copy['txId1'] + node_offset
+        edges_copy['txId2'] = edges_copy['txId2'] + node_offset
+        inflated_edges_list.append(edges_copy)
+
+        if (i + 1) % 10 == 0 or i + 1 == replication_factor:
+            print(f"  Created copy {i+1}/{replication_factor}")
+
+    # Combine all copies
+    print("  Concatenating copies...")
+    inflated_nodes = pd.concat(inflated_nodes_list, ignore_index=True)
+    inflated_edges = pd.concat(inflated_edges_list, ignore_index=True)
+
+    # Add cross-replica edges (10% of target)
+    print("  Adding cross-replica edges...")
+    num_cross_edges = min(int(target_edges * 0.1), original_edge_count)
+    cross_edges = []
+
+    np.random.seed(42)
+    for _ in range(num_cross_edges):
+        # Random edge between different replicas
+        replica1 = np.random.randint(0, replication_factor)
+        replica2 = np.random.randint(0, replication_factor)
+        if replica1 != replica2:
+            offset1 = replica1 * original_node_count * 10
+            offset2 = replica2 * original_node_count * 10
+
+            # Pick random nodes from each replica
+            node1 = nodes['txId'].iloc[np.random.randint(0, original_node_count)] + offset1
+            node2 = nodes['txId'].iloc[np.random.randint(0, original_node_count)] + offset2
+
+            cross_edges.append({
+                'txId1': node1,
+                'txId2': node2
+            })
+
+    if cross_edges:
+        cross_edges_df = pd.DataFrame(cross_edges)
+        inflated_edges = pd.concat([inflated_edges, cross_edges_df], ignore_index=True)
+        print(f"  Added {len(cross_edges):,} cross-replica edges")
+
+    # Trim to exact target size
+    if len(inflated_edges) > target_edges:
+        print("  Trimming to target size...")
+        inflated_edges = inflated_edges.sample(n=target_edges, random_state=42).reset_index(drop=True)
+
+    print(f"  ✓ Final: {len(inflated_nodes):,} nodes, {len(inflated_edges):,} edges")
+
+    return inflated_nodes, inflated_edges
 
 
-def convert_to_sirius_format():
-    """
-    Convert processed data to Sirius-compatible format.
+def save_dataset(nodes, edges, suffix):
+    """Save dataset to CSV files."""
+    nodes_file = f"data/processed/nodes_{suffix}.csv"
+    edges_file = f"data/processed/edges_{suffix}.csv"
 
-    TODO: Implement Sirius format conversion
-    - Research Sirius data loading requirements
-    - Create appropriate format (Parquet, Arrow, etc.)
-    """
-    print("\nConverting to Sirius format...")
-    print("TODO: Implement Sirius format conversion")
+    nodes.to_csv(nodes_file, index=False)
+    edges.to_csv(edges_file, index=False)
+
+    # Show file sizes
+    nodes_size_mb = Path(nodes_file).stat().st_size / (1024 ** 2)
+    edges_size_mb = Path(edges_file).stat().st_size / (1024 ** 2)
+
+    print(f"  ✓ Saved: {suffix} ({nodes_size_mb + edges_size_mb:.1f} MB)")
 
 
 def main():
     """Main execution function."""
     print("="*50)
-    print("ELLIPTIC DATASET PREPARATION")
+    print("ELLIPTIC DATASET PREPARATION (SLIM)")
+    print("="*50)
+    print("\nCreates optimized datasets with only required columns:")
+    print("  - Nodes: txId, class")
+    print("  - Edges: txId1, txId2")
+    print("\nDataset sizes: 100k, 1M, 5M, 20M edges")
     print("="*50)
 
     # Step 1: Setup
@@ -250,22 +318,36 @@ def main():
     # Step 3: Load
     features, classes, edges = load_raw_data()
 
-    # Step 4: Preprocess
-    data, edges = preprocess_data(features, classes, edges)
+    # Step 4: Preprocess (keep only required columns)
+    nodes, edges = preprocess_data(features, classes, edges)
 
-    # Step 5: Create subsets
-    create_subsets(data, edges, sizes=[10000, 50000, 100000, None])
+    # Step 5: Create base 100k subset
+    base_nodes, base_edges = create_base_subset(nodes, edges, target_edges=100000)
+    save_dataset(base_nodes, base_edges, "100k")
 
-    # Step 6: Format conversions
-    convert_to_duckdb_format()
-    convert_to_sirius_format()
+    # Step 6: Inflate to larger sizes
+    for target_edges, suffix in [
+        (1_000_000, "1m"),
+        (5_000_000, "5m"),
+        (20_000_000, "20m"),
+    ]:
+        inflated_nodes, inflated_edges = inflate_dataset(
+            base_nodes, base_edges, target_edges, suffix
+        )
+        save_dataset(inflated_nodes, inflated_edges, suffix)
 
     print("\n" + "="*50)
     print("DATA PREPARATION COMPLETE")
     print("="*50)
+    print("\nCreated datasets:")
+    print("  - 100k:  100,000 edges (base)")
+    print("  - 1m:  1,000,000 edges")
+    print("  - 5m:  5,000,000 edges")
+    print("  - 20m: 20,000,000 edges")
     print("\nNext steps:")
     print("  - Review data in data/processed/")
-    print("  - Run benchmarks: python scripts/02_run_benchmarks.py")
+    print("  - Run benchmarks:")
+    print("    python scripts/run_persistent_session_benchmarks.py")
 
 
 if __name__ == "__main__":
