@@ -103,13 +103,16 @@ if ! command -v nvcc &> /dev/null; then
         echo 'export PATH=/usr/local/cuda/bin:$PATH' >> ~/.bashrc
         echo 'export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
     fi
-
-    export PATH=/usr/local/cuda/bin:$PATH
-    export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
     echo "✓ CUDA Toolkit installed"
 else
-    echo "✓ CUDA Toolkit already installed: $(nvcc --version | grep release | awk '{print $5}')"
+    CUDA_VERSION=$(nvcc --version | grep release | awk '{print $6}' | cut -d',' -f1)
+    echo "✓ CUDA Toolkit already installed: $CUDA_VERSION"
 fi
+
+# Ensure CUDA paths are set for current session
+export PATH=/usr/local/cuda/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+export CUDA_HOME=/usr/local/cuda
 
 # Install GCC 12 for CUDA compatibility
 echo "Checking GCC compatibility..."
@@ -230,6 +233,7 @@ export SIRIUS_HOME_PATH=$(pwd)
 export LDFLAGS="-Wl,-rpath,$CONDA_PREFIX/lib -L$CONDA_PREFIX/lib $LDFLAGS"
 export PATH=/usr/local/cuda/bin:$PATH
 export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+export CUDA_HOME=/usr/local/cuda
 
 # Initialize submodules
 echo "Initializing git submodules..."
