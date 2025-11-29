@@ -58,7 +58,7 @@ def ensure_dataset_exists(dataset_size):
         return False
     return True
 
-def run_comprehensive_benchmark(databases=['both'], session_queries=100, output_dir='results/persistent_session'):
+def run_comprehensive_benchmark(databases=['both'], session_queries=100, output_dir='results/persistent_session', dataset_sizes=None):
     """
     Run comprehensive persistent session benchmarks.
 
@@ -66,6 +66,7 @@ def run_comprehensive_benchmark(databases=['both'], session_queries=100, output_
         databases: List of databases to test ['duckdb', 'sirius', 'both']
         session_queries: Number of queries per persistent session
         output_dir: Directory to save results
+        dataset_sizes: List of dataset sizes to test (default: all)
 
     Returns:
         List of all benchmark results
@@ -77,19 +78,29 @@ def run_comprehensive_benchmark(databases=['both'], session_queries=100, output_
     if 'both' in databases:
         databases = ['duckdb', 'sirius']
 
+    # Use all datasets if none specified
+    if dataset_sizes is None:
+        dataset_sizes = DATASET_SIZES
+    else:
+        # Validate dataset sizes
+        valid_sizes = set(DATASET_SIZES + ['50m', '100m'])  # Include large datasets
+        for size in dataset_sizes:
+            if size not in valid_sizes:
+                print(f"⚠️  Warning: Unknown dataset size '{size}' (valid: {', '.join(sorted(valid_sizes))})")
+
     print("=" * 80)
     print("PERSISTENT SESSION BENCHMARK SUITE")
     print("=" * 80)
     print(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Databases: {', '.join(databases)}")
-    print(f"Dataset sizes: {', '.join(DATASET_SIZES)}")
+    print(f"Dataset sizes: {', '.join(dataset_sizes)}")
     print(f"Queries: {', '.join(GPU_QUERIES)}")
     print(f"Session queries: {session_queries}")
     print(f"Output directory: {output_dir}")
     print("=" * 80)
 
     all_results = []
-    total_tests = len(databases) * len(DATASET_SIZES) * len(GPU_QUERIES)
+    total_tests = len(databases) * len(dataset_sizes) * len(GPU_QUERIES)
     current_test = 0
 
     for db in databases:
@@ -97,7 +108,7 @@ def run_comprehensive_benchmark(databases=['both'], session_queries=100, output_
         print(f"TESTING DATABASE: {db.upper()}")
         print(f"{'='*80}")
 
-        for size in DATASET_SIZES:
+        for size in dataset_sizes:
             print(f"\n{'-'*80}")
             print(f"Dataset Size: {size}")
             print(f"{'-'*80}")
@@ -280,6 +291,8 @@ Examples:
                         help=f'Number of queries per session (default: {DEFAULT_SESSION_QUERIES})')
     parser.add_argument('--output-dir', default='results/persistent_session',
                         help='Output directory for results (default: results/persistent_session)')
+    parser.add_argument('--size', action='append', dest='dataset_sizes',
+                        help='Dataset size to test (can be specified multiple times, e.g., --size 50m --size 100m)')
 
     args = parser.parse_args()
 
@@ -296,7 +309,8 @@ Examples:
     results = run_comprehensive_benchmark(
         databases=databases,
         session_queries=session_queries,
-        output_dir=args.output_dir
+        output_dir=args.output_dir,
+        dataset_sizes=args.dataset_sizes
     )
 
     # Save results
