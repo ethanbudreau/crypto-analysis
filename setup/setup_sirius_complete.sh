@@ -171,6 +171,12 @@ elif ! command -v conda &> /dev/null; then
 else
     echo "✓ Miniconda already available: $(conda --version)"
 fi
+
+# Accept conda Terms of Service
+echo "Accepting conda Terms of Service..."
+$HOME/miniconda3/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main 2>/dev/null || true
+$HOME/miniconda3/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r 2>/dev/null || true
+echo "✓ Conda TOS accepted"
 echo ""
 
 # ==========================================
