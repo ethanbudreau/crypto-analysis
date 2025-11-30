@@ -83,7 +83,7 @@ Using the **Elliptic Bitcoin Transaction Dataset** (203K+ nodes, 234K+ edges), w
 - **DuckDB average**: 110.7 ms per query (24 tests)
 - **Overall GPU advantage**: 3.95x speedup
 
-> 📊 **Methodology**: All benchmarks use persistent session mode (100 queries per session) to amortize initialization overhead and measure true query execution performance. See [VERIFIED_GPU_BENCHMARK_RESULTS.md](VERIFIED_GPU_BENCHMARK_RESULTS.md) for detailed analysis.
+> 📊 **Methodology**: All benchmarks use persistent session mode (50 queries per session) to amortize initialization overhead and measure true query execution performance. See [VERIFIED_GPU_BENCHMARK_RESULTS.md](VERIFIED_GPU_BENCHMARK_RESULTS.md) for detailed analysis.
 
 ## Quick Start
 
@@ -118,7 +118,7 @@ crypto-transaction-analysis/
 │
 ├── data/
 │   ├── raw/                # Original Elliptic dataset
-│   └── processed/          # Processed datasets (100K, 1M, 5M, 20M edges)
+│   └── processed/          # Processed datasets (100K, 1M, 5M, 20M, 50M, 100M edges)
 │
 ├── sql/                    # SQL query definitions
 │   ├── duckdb/             # CPU-based queries
@@ -136,6 +136,26 @@ crypto-transaction-analysis/
 └── results/                # Benchmark outputs and CSV data
 ```
 
+## Testing Platforms
+
+We benchmark performance across two hardware configurations:
+
+### Local Development Platform
+- **CPU**: Intel Core Ultra 7 265k (20 cores, 3.9-5.5 GHz)
+- **GPU**: NVIDIA RTX 3050 (8GB VRAM)
+- **RAM**: 96 GB DDR5
+- **OS**: Ubuntu 20.04+ / WSL2
+
+### AWS Production Platform (g4dn.2xlarge)
+- **CPU**: 8 vCPUs (Intel Xeon Platinum 8259CL @ 2.5 GHz)
+- **GPU**: NVIDIA Tesla T4 (16GB VRAM)
+- **RAM**: 32 GB
+- **Storage**: NVMe SSD
+- **OS**: Ubuntu 20.04
+- **Network**: Up to 25 Gbps
+
+The AWS platform enables testing on larger datasets (50M, 100M edges) and provides consistent cloud-based benchmarking results.
+
 ## System Requirements
 
 ### Minimum (DuckDB Only)
@@ -145,7 +165,7 @@ crypto-transaction-analysis/
 
 ### Full Setup (DuckDB + Sirius)
 - Ubuntu 20.04+
-- NVIDIA GPU (Volta or newer)
+- NVIDIA GPU (Volta or newer recommended)
 - CUDA 11.2+
 - 16+ vCPUs (for compilation)
 - 16+ GB RAM, 4+ GB VRAM
