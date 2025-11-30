@@ -9,7 +9,7 @@ across multiple dataset sizes for both DuckDB and Sirius.
 This script tests:
 - Dataset sizes: 100k, 1m, 5m, 20m edges
 - All GPU-compatible queries: 1_hop_gpu, 2_hop_gpu, 3_hop_gpu, k_hop_gpu, shortest_path_gpu
-- Persistent session mode: 100 sequential queries per test
+- Persistent session mode: 50 sequential queries per test (configurable)
 - Both DuckDB (CPU baseline) and Sirius (GPU) databases
 
 Outputs consistent CSV format for easy analysis.
@@ -19,8 +19,8 @@ Usage:
 
 Options:
     --db: Which database to test (default: both)
-    --quick: Run quick test with 10 queries instead of 100
-    --session-queries: Number of queries per session (default: 100)
+    --quick: Run quick test with 10 queries instead of 50
+    --session-queries: Number of queries per session (default: 50)
     --output-dir: Directory for results (default: results/persistent_session)
 """
 
@@ -44,8 +44,8 @@ run_sirius_benchmark = run_benchmarks.run_sirius_benchmark
 # Test configuration
 DATASET_SIZES = ['100k', '1m', '5m', '20m']
 # All GPU queries including k_hop and shortest_path (which use UNION ALL with partial fallback)
-GPU_QUERIES = ['1_hop', '2_hop', '3_hop', 'k_hop', 'shortest_path']
-DEFAULT_SESSION_QUERIES = 100
+GPU_QUERIES = ['1_hop', '2_hop', 'k_hop', 'shortest_path']  # 3_hop removed - causes GPU issues
+DEFAULT_SESSION_QUERIES = 50
 
 def ensure_dataset_exists(dataset_size):
     """Check if dataset files exist."""
@@ -58,7 +58,7 @@ def ensure_dataset_exists(dataset_size):
         return False
     return True
 
-def run_comprehensive_benchmark(databases=['both'], session_queries=100, output_dir='results/persistent_session', dataset_sizes=None):
+def run_comprehensive_benchmark(databases=['both'], session_queries=100, output_dir='results/persistent_session', dataset_sizes=None, queries=None):
     """
     Run comprehensive persistent session benchmarks.
 
@@ -67,6 +67,7 @@ def run_comprehensive_benchmark(databases=['both'], session_queries=100, output_
         session_queries: Number of queries per persistent session
         output_dir: Directory to save results
         dataset_sizes: List of dataset sizes to test (default: all)
+        queries: List of queries to test (default: all GPU queries)
 
     Returns:
         List of all benchmark results
@@ -88,19 +89,28 @@ def run_comprehensive_benchmark(databases=['both'], session_queries=100, output_
             if size not in valid_sizes:
                 print(f"⚠️  Warning: Unknown dataset size '{size}' (valid: {', '.join(sorted(valid_sizes))})")
 
+    # Use all GPU queries if none specified
+    if queries is None:
+        queries = GPU_QUERIES
+    else:
+        # Validate queries
+        for query in queries:
+            if query not in GPU_QUERIES:
+                print(f"⚠️  Warning: Unknown query '{query}' (valid: {', '.join(GPU_QUERIES)})")
+
     print("=" * 80)
     print("PERSISTENT SESSION BENCHMARK SUITE")
     print("=" * 80)
     print(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Databases: {', '.join(databases)}")
     print(f"Dataset sizes: {', '.join(dataset_sizes)}")
-    print(f"Queries: {', '.join(GPU_QUERIES)}")
+    print(f"Queries: {', '.join(queries)}")
     print(f"Session queries: {session_queries}")
     print(f"Output directory: {output_dir}")
     print("=" * 80)
 
     all_results = []
-    total_tests = len(databases) * len(dataset_sizes) * len(GPU_QUERIES)
+    total_tests = len(databases) * len(dataset_sizes) * len(queries)
     current_test = 0
 
     for db in databases:
@@ -116,10 +126,10 @@ def run_comprehensive_benchmark(databases=['both'], session_queries=100, output_
             # Check if dataset exists
             if not ensure_dataset_exists(size):
                 print(f"  ⏭️  Skipping {size} dataset (not found)")
-                current_test += len(GPU_QUERIES)
+                current_test += len(queries)
                 continue
 
-            for query in GPU_QUERIES:
+            for query in queries:
                 current_test += 1
                 print(f"\n[{current_test}/{total_tests}] {db.upper()} | {size} | {query}", flush=True)
                 print("-" * 80, flush=True)
@@ -293,6 +303,8 @@ Examples:
                         help='Output directory for results (default: results/persistent_session)')
     parser.add_argument('--size', action='append', dest='dataset_sizes',
                         help='Dataset size to test (can be specified multiple times, e.g., --size 50m --size 100m)')
+    parser.add_argument('--query', action='append', dest='queries',
+                        help='Query to test (can be specified multiple times, e.g., --query 1_hop --query 2_hop)')
 
     args = parser.parse_args()
 
@@ -310,7 +322,8 @@ Examples:
         databases=databases,
         session_queries=session_queries,
         output_dir=args.output_dir,
-        dataset_sizes=args.dataset_sizes
+        dataset_sizes=args.dataset_sizes,
+        queries=args.queries
     )
 
     # Save results

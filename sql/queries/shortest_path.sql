@@ -1,4 +1,7 @@
--- Shortest Path Analysis Query (GPU-COMPATIBLE VERSION)
+-- Shortest Path Analysis Query
+-- ⚠️ GPU STATUS: PARTIAL COMPATIBILITY - Not recommended
+-- REASON: UNION ALL causes partial CPU fallback (joins on GPU, union on CPU)
+-- RECOMMENDATION: Use DuckDB recursive CTE instead (~0.45s for full BFS on 5M)
 -- Compute the shortest path distance from each node to the nearest illicit node
 --
 -- CHANGES FROM RECURSIVE CTE VERSION:

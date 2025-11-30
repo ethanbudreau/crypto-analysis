@@ -16,9 +16,10 @@ This project evaluates whether GPU-accelerated databases can significantly impro
 - **Sirius** (GPU-accelerated database with DuckDB integration)
 
 Using the **Elliptic Bitcoin Transaction Dataset** (203K+ nodes, 234K+ edges), we benchmark graph traversal queries including:
-- 1-hop and 2-hop reachability from known illicit nodes
-- k-hop traversal (3-4 hops)
-- Shortest path analysis
+- 1-hop and 2-hop reachability from known illicit nodes (fully GPU-accelerated)
+- k-hop traversal and shortest path analysis (partial GPU acceleration)
+
+**Note:** 3-hop queries excluded from benchmarks due to Sirius GPU segmentation faults.
 
 ### 🎯 Key Findings
 
@@ -63,11 +64,19 @@ Using the **Elliptic Bitcoin Transaction Dataset** (203K+ nodes, 234K+ edges), w
 
 #### GPU Compatibility
 
-✅ **GPU-accelerated queries**: `1_hop_gpu`, `2_hop_gpu`, `3_hop_gpu`
+✅ **Fully GPU-accelerated**:
+- `1_hop` - Simple joins (2 tables)
+- `2_hop` - Multi-hop joins (4 tables)
 
-❌ **CPU fallback** (UNION ALL not GPU-compatible):
-- `k_hop_gpu` - Variable k-hop traversal
-- `shortest_path_gpu` - Shortest path analysis
+⚠️ **Partial GPU acceleration** (joins on GPU, aggregation on CPU):
+- `k_hop` - Uses UNION ALL which triggers partial CPU fallback
+- `shortest_path` - Uses UNION ALL which triggers partial CPU fallback
+
+❌ **Not GPU-compatible**:
+- `3_hop` - Causes segmentation faults on Sirius GPU (6-table joins)
+- Queries with constant literal columns (e.g., `3 AS hop_distance`) - trigger fallback or hangs
+
+> **Note:** For k-hop and shortest_path queries, DuckDB's CPU-based recursive CTE implementation is actually faster (~0.45s for full 20-hop BFS on 5M dataset) than GPU execution due to highly optimized recursion handling.
 
 **Overall Performance:**
 - **Sirius average**: 28.0 ms per query (24 tests)
@@ -192,25 +201,38 @@ jupyter notebook
 
 All queries are defined in SQL files under `sql/queries/` directory:
 
-### GPU-Accelerated Queries (All Benchmarked)
+### GPU-Accelerated Queries
 
 1. **1-hop Reachability** (`sql/queries/1_hop.sql`)
    - Find transactions directly connected to known illicit nodes
+   - ✅ Fully GPU-accelerated
 
 2. **2-hop Reachability** (`sql/queries/2_hop.sql`)
    - Find transactions 2 steps away from illicit activity
+   - ✅ Fully GPU-accelerated
 
-3. **3-hop Reachability** (`sql/queries/3_hop.sql`)
-   - Find transactions 3 steps away from illicit activity
-
-4. **k-hop Traversal** (`sql/queries/k_hop.sql`)
+3. **k-hop Traversal** (`sql/queries/k_hop.sql`)
    - Multi-step relationship exploration (1-4 hops)
-   - ⚠️ Uses UNION ALL - causes partial CPU fallback in Sirius (JOINs on GPU, UNION on CPU)
+   - ⚠️ Uses UNION ALL - partial CPU fallback (joins run on GPU)
+   - 💡 **Recommendation**: Use DuckDB's recursive CTE for better performance
 
-5. **Shortest Path** (`sql/queries/shortest_path.sql`)
-   - Compute distance to nearest illicit node (up to 5 hops)
-   - ⚠️ Uses UNION ALL - causes partial CPU fallback in Sirius (JOINs on GPU, UNION on CPU)
-   - **Coverage:** Graph analysis on 100k dataset shows this query captures 98.2% of all reachable nodes (2,642 of 2,690). Only 2.7% of nodes are reachable from illicit transactions (97.3% are in disconnected components). Maximum graph distance is 21 hops.
+4. **Shortest Path** (`sql/queries/shortest_path.sql`)
+   - Compute distance to nearest illicit node (up to 20 hops)
+   - ⚠️ Uses UNION ALL - partial CPU fallback (joins run on GPU)
+   - 💡 **Recommendation**: Use DuckDB's recursive CTE (~0.45s on 5M dataset)
+   - **Coverage:** Graph analysis shows 98.2% of reachable nodes are within 5 hops. Only 2.7% of total nodes are reachable from illicit transactions (97.3% are in disconnected components).
+
+### Experimental: Iterative GPU BFS
+
+An experimental `scripts/iterative_gpu_bfs.py` implements true breadth-first search using GPU for neighbor expansion:
+- Runs each hop as separate GPU query
+- Python handles iteration control and visited tracking
+- Fully exhaustive until no new nodes found
+- Currently requires data reload per iteration (~7s overhead each)
+
+**Performance:**
+- 10 iterations: ~77s total, ~7s per iteration
+- Alternative: Use DuckDB recursive CTE (0.45s for 20 hops)
 
 ## Benchmarking
 

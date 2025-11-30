@@ -1,4 +1,7 @@
--- k-hop Traversal Query (GPU-COMPATIBLE VERSION)
+-- k-hop Traversal Query
+-- ⚠️ GPU STATUS: PARTIAL COMPATIBILITY - Not recommended
+-- REASON: UNION ALL causes partial CPU fallback (joins on GPU, union on CPU)
+-- RECOMMENDATION: Use DuckDB recursive CTE instead (~0.45s for 20 hops on 5M)
 -- Find all transactions within k steps (up to 4 hops) from known illicit nodes
 --
 -- CHANGES FROM RECURSIVE CTE VERSION:

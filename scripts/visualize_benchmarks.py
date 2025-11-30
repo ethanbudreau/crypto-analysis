@@ -40,7 +40,7 @@ DATASET_SIZE_MAP = {
 }
 
 # Query types in order
-QUERY_TYPES = ['1_hop', '2_hop', '3_hop', 'k_hop', 'shortest_path']
+QUERY_TYPES = ['1_hop', '2_hop', 'k_hop', 'shortest_path']
 
 # Color palette for 4 configurations
 COLORS = {

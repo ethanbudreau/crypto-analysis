@@ -49,6 +49,10 @@ data/processed/*.db
 # Results and benchmarks
 results/*.csv
 results/*.json
+results/persistent_session/*.csv
+results/local_benchmarks/*.csv
+results/aws_benchmarks/*.csv
+results/archived_test_results/*.csv
 results/figures/*.png
 results/figures/*.pdf
 results/figures/*.svg

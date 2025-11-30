@@ -178,7 +178,7 @@ def run_duckdb_benchmark(dataset_size, query_name, num_runs=3, mode='cold_start'
         }
 
     elif mode == 'persistent_session':
-        # Persistent session: Initialize once, run many queries
+        # Persistent session: Initialize once, run many VARIED queries
         conn = duckdb.connect(':memory:')
 
         # One-time initialization
@@ -191,12 +191,17 @@ def run_duckdb_benchmark(dataset_size, query_name, num_runs=3, mode='cold_start'
         warmup_result = conn.execute(query).fetchall()
         row_count = len(warmup_result)
 
-        # Run many queries in sequence
+        # Run many VARIED queries in sequence to prevent caching
+        # Each query has a unique WHERE clause: AND n1.txId > {threshold}
         session_start = time.time()
         for i in range(session_queries):
-            result = conn.execute(query).fetchall()
-            # Progress output every 10 queries
-            if (i + 1) % 10 == 0 or (i + 1) == session_queries:
+            # Vary the query by adding a unique threshold condition
+            threshold = i % 100  # Cycle through 0-99
+            varied_query = query.replace("WHERE n1.class = '1'",
+                                        f"WHERE n1.class = '1' AND n1.txId > {threshold}")
+            result = conn.execute(varied_query).fetchall()
+            # Progress output every 5 queries or at end
+            if (i + 1) % 5 == 0 or (i + 1) == session_queries:
                 elapsed = time.time() - session_start
                 avg_so_far = elapsed / (i + 1)
                 print(f"  Progress: {i+1}/{session_queries} queries ({elapsed:.1f}s, {avg_so_far:.4f}s avg)", flush=True)
@@ -207,7 +212,7 @@ def run_duckdb_benchmark(dataset_size, query_name, num_runs=3, mode='cold_start'
         avg_query_time = session_time / session_queries
         total_time = init_time + session_time
 
-        print(f"  ✓ Init: {init_time:.4f}s | {session_queries} queries: {session_time:.4f}s | Avg per query: {avg_query_time:.4f}s | {row_count} rows", flush=True)
+        print(f"  ✓ Init: {init_time:.4f}s | {session_queries} VARIED queries: {session_time:.4f}s | Avg per query: {avg_query_time:.4f}s | {row_count} rows", flush=True)
 
         return {
             'database': 'duckdb',
@@ -220,7 +225,8 @@ def run_duckdb_benchmark(dataset_size, query_name, num_runs=3, mode='cold_start'
             'total_time': total_time,
             'num_queries': session_queries,
             'amortized_time_per_query': total_time / session_queries,
-            'result_row_count': row_count
+            'result_row_count': row_count,
+            'note': 'Queries varied with unique WHERE clauses to prevent caching'
         }
 
 
@@ -314,9 +320,13 @@ def run_sirius_benchmark(dataset_size, query_name, num_runs=3, mode='cold_start'
     }
     buffer_min, buffer_max = buffer_sizes.get(dataset_size, ('2 GB', '4 GB'))
 
-    # Clean query (remove comments)
-    query_lines = [line for line in query.split('\n')
-                   if line.strip() and not line.strip().startswith('--')]
+    # Clean query (remove all SQL comments including inline --)
+    query_lines = []
+    for line in query.split('\n'):
+        # Remove inline comments by splitting on '--' and taking first part
+        line_without_comment = line.split('--')[0].strip()
+        if line_without_comment:
+            query_lines.append(line_without_comment)
     clean_query = ' '.join(query_lines)
 
     if mode == 'cold_start':
@@ -342,12 +352,10 @@ call gpu_processing('{clean_query.replace("'", "''")}');
                 temp_sql_file = f.name
 
             try:
-                # Execute Sirius (includes all initialization)
+                # Execute Sirius (includes all initialization) - no capture for max GPU utilization
                 start_time = time.time()
                 result = subprocess.run(
                     [sirius_binary, "-init", temp_sql_file],
-                    capture_output=True,
-                    text=True,
                     timeout=300
                 )
                 exec_time = time.time() - start_time
@@ -420,28 +428,23 @@ call gpu_processing('{clean_query.replace("'", "''")}');
             temp_sql_file = f.name
 
         try:
-            # Execute entire script and measure
+            # Execute entire script and measure - no capture to avoid buffer blocking
             total_start = time.time()
             result = subprocess.run(
                 [sirius_binary, "-init", temp_sql_file],
-                capture_output=True,
-                text=True,
                 timeout=600
             )
             total_time = time.time() - total_start
 
             if result.returncode != 0:
-                print(f"  ✗ Sirius execution failed")
+                print(f"  ✗ Sirius execution failed with exit code {result.returncode}")
                 return {'database': 'sirius', 'query': query_name, 'dataset_size': dataset_size,
-                        'mode': mode, 'avg_query_time': None, 'error': 'Execution failed'}
+                        'mode': mode, 'avg_query_time': None, 'error': f'Execution failed with exit code {result.returncode}'}
 
-            # Parse timing output to separate init from query times
-            # For now, we estimate: assume warm queries are fast compared to init
-            # This is a rough approximation; ideally we'd parse Sirius output
-            estimated_init_time = total_time * 0.8  # Rough estimate
-            estimated_query_time = (total_time - estimated_init_time) / (num_runs + 1)  # +1 for warmup
+            # Calculate average time including all overhead (init + warmup + queries)
+            avg_query_time = total_time / (num_runs + 1)  # +1 for warmup
 
-            print(f"  ✓ Total: {total_time:.4f}s | Est. Init: {estimated_init_time:.4f}s | Est. Avg Query: {estimated_query_time:.4f}s")
+            print(f"  ✓ Total: {total_time:.4f}s | Avg (incl. overhead): {avg_query_time:.4f}s")
 
         except subprocess.TimeoutExpired:
             print(f"  ✗ Execution timed out")
@@ -459,13 +462,12 @@ call gpu_processing('{clean_query.replace("'", "''")}');
             'query': query_name,
             'dataset_size': dataset_size,
             'mode': mode,
-            'initialization_time': estimated_init_time,
-            'avg_query_time': estimated_query_time,
+            'avg_query_time': avg_query_time,
             'total_time': total_time,
             'num_runs': num_runs,
             'buffer_size_min': buffer_min,
             'buffer_size_max': buffer_max,
-            'note': 'Query timing estimated from total time'
+            'note': 'Average includes all overhead (init + warmup + queries)'
         }
 
         if gpu_stats_after:
@@ -503,10 +505,16 @@ call gpu_buffer_init('{buffer_min}', '{buffer_max}');
 call gpu_processing('{clean_query.replace("'", "''")}');
 """
 
-        # Append many sequential queries
-        escaped_query = clean_query.replace("'", "''")
+        # Append many VARIED sequential queries to prevent caching
+        # Each query has a unique WHERE clause: AND n1.txId > {threshold}
         for i in range(session_queries):
-            session_script += f"\n-- Session query {i+1}\ncall gpu_processing('{escaped_query}');\n"
+            # Vary the query by adding a unique threshold condition
+            threshold = i % 100  # Cycle through 0-99
+            # Start with clean_query (which has single quotes), vary it, then escape
+            varied_query = clean_query.replace("WHERE n1.class = '1'",
+                                              f"WHERE n1.class = '1' AND n1.txId > {threshold}")
+            escaped_query = varied_query.replace("'", "''")
+            session_script += f"\n-- Session query {i+1} (threshold={threshold})\ncall gpu_processing('{escaped_query}');\n"
 
         # Write session script
         with tempfile.NamedTemporaryFile(mode='w', suffix='.sql', delete=False) as f:
@@ -514,31 +522,27 @@ call gpu_processing('{clean_query.replace("'", "''")}');
             temp_sql_file = f.name
 
         try:
-            # Execute session
+            # Execute session - suppress stdout (table outputs) but keep stderr for errors
             total_start = time.time()
             result = subprocess.run(
                 [sirius_binary, "-init", temp_sql_file],
-                capture_output=True,
-                text=True,
+                stdout=subprocess.DEVNULL,  # Suppress query result tables
                 timeout=1200  # 20 minute timeout for long sessions
             )
             total_time = time.time() - total_start
 
             if result.returncode != 0:
-                print(f"  ✗ Session failed")
+                print(f"  ✗ Session failed with exit code {result.returncode}")
                 return {'database': 'sirius', 'query': query_name, 'dataset_size': dataset_size,
-                        'mode': mode, 'avg_query_time': None, 'error': 'Session failed'}
+                        'mode': mode, 'avg_query_time': None, 'error': f'Session failed with exit code {result.returncode}'}
 
-            # Estimate times (rough approximation)
-            estimated_init_time = min(total_time * 0.3, 5.0)  # Cap init at 5s
-            session_time = total_time - estimated_init_time
-            avg_query_time = session_time / (session_queries + 1)  # +1 for warmup
-            amortized_time = total_time / session_queries
+            # Calculate average time including all overhead (init + warmup + queries)
+            avg_query_time = total_time / (session_queries + 1)  # +1 for warmup
 
             if row_count is not None:
-                print(f"  ✓ Total: {total_time:.4f}s | {session_queries} queries | Avg: {avg_query_time:.4f}s | Amortized: {amortized_time:.4f}s | {row_count} rows")
+                print(f"  ✓ Total: {total_time:.4f}s | {session_queries} VARIED queries | Avg (incl. overhead): {avg_query_time:.4f}s | {row_count} rows")
             else:
-                print(f"  ✓ Total: {total_time:.4f}s | {session_queries} queries | Avg: {avg_query_time:.4f}s | Amortized: {amortized_time:.4f}s")
+                print(f"  ✓ Total: {total_time:.4f}s | {session_queries} VARIED queries | Avg (incl. overhead): {avg_query_time:.4f}s")
 
         except subprocess.TimeoutExpired:
             print(f"  ✗ Session timed out")
@@ -556,15 +560,12 @@ call gpu_processing('{clean_query.replace("'", "''")}');
             'query': query_name,
             'dataset_size': dataset_size,
             'mode': mode,
-            'initialization_time': estimated_init_time,
-            'session_total_time': session_time,
             'avg_query_time': avg_query_time,
             'total_time': total_time,
             'num_queries': session_queries,
-            'amortized_time_per_query': amortized_time,
             'buffer_size_min': buffer_min,
             'buffer_size_max': buffer_max,
-            'note': 'Query timing estimated from total time'
+            'note': 'Queries varied with unique WHERE clauses to prevent caching; average includes all overhead (init + warmup + queries)'
         }
 
         if row_count is not None:
