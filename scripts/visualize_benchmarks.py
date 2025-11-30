@@ -142,7 +142,8 @@ def plot_performance_comparison(df):
         ax.legend(fontsize=8, loc='upper left')
         ax.grid(axis='y', alpha=0.3)
 
-    # Remove extra subplot
+    # Remove extra subplots (we have 4 queries, but 2x3=6 subplots)
+    fig.delaxes(axes[4])
     fig.delaxes(axes[5])
 
     plt.suptitle('Performance Comparison: DuckDB vs Sirius (Local & AWS)',
@@ -192,7 +193,8 @@ def plot_scaling_analysis(df):
         ax.set_xticks([100_000, 1_000_000, 5_000_000, 20_000_000, 50_000_000, 100_000_000])
         ax.set_xticklabels(['100k', '1M', '5M', '20M', '50M', '100M'], rotation=45, ha='right')
 
-    # Remove extra subplot
+    # Remove extra subplots (we have 4 queries, but 2x3=6 subplots)
+    fig.delaxes(axes[4])
     fig.delaxes(axes[5])
 
     plt.suptitle('Scaling Analysis: Performance vs Dataset Size (Log-Log Scale)',
@@ -275,62 +277,93 @@ def plot_speedup_factors(df):
     plt.close()
 
 
-def plot_platform_comparison(df):
+def plot_gpu_vs_cpus(df):
     """
-    Plot 4: Platform comparison (Local vs AWS).
-    Two charts: CPU comparison and GPU comparison.
+    Plot 4: GPU speedup vs CPU from the other platform.
+    Left: Tesla T4 (AWS) speedup vs Local CPU
+    Right: RTX 3050 (Local) speedup vs AWS CPU
     """
-    print("\nGenerating Plot 4: Platform Comparison...")
+    print("\nGenerating Plot 4: GPU vs CPU Speedups...")
 
     # Filter to common dataset sizes
     common_sizes = ['100k', '1m', '5m', '20m']
     df_common = df[df['dataset_size'].isin(common_sizes)].copy()
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7))
 
-    # CPU Comparison (DuckDB)
-    cpu_df = df_common[df_common['database'] == 'duckdb']
-    cpu_pivot = cpu_df.pivot_table(
-        index=['dataset_size', 'query'],
-        columns='platform',
-        values='avg_query_time'
-    )
-    cpu_pivot = cpu_pivot.reset_index()
+    # Get CPU times for both platforms
+    local_cpu = df_common[(df_common['platform'] == 'Local') & (df_common['database'] == 'duckdb')]
+    aws_cpu = df_common[(df_common['platform'] == 'AWS') & (df_common['database'] == 'duckdb')]
 
-    # Average across queries for simplicity
-    cpu_avg = cpu_df.groupby(['dataset_size', 'platform'])['avg_query_time'].mean().unstack()
-    cpu_avg = cpu_avg.reindex(common_sizes)
-    # Reorder columns to ensure Local is first (faster CPU gets darker color)
-    cpu_avg = cpu_avg[['Local', 'AWS']]
+    # Get GPU times for both platforms
+    local_gpu = df_common[(df_common['platform'] == 'Local') & (df_common['database'] == 'sirius')]
+    aws_gpu = df_common[(df_common['platform'] == 'AWS') & (df_common['database'] == 'sirius')]
 
-    cpu_avg.plot(kind='bar', ax=ax1, color=['#08519c', '#6baed6'], width=0.7)
-    ax1.set_title('CPU Comparison: Local vs AWS DuckDB', fontsize=14, fontweight='bold')
-    ax1.set_xlabel('Dataset Size', fontsize=11)
-    ax1.set_ylabel('Avg Query Time (seconds)', fontsize=11)
-    ax1.set_xticklabels(ax1.get_xticklabels(), rotation=45, ha='right')
-    ax1.legend(['Local (Core Ultra 7 265k)', 'AWS (g4dn.2xlarge)'], fontsize=10)
-    ax1.grid(axis='y', alpha=0.3)
+    # Calculate speedups for Tesla T4 vs Local CPU (cross-platform comparison)
+    t4_speedups = []
+    for size in common_sizes:
+        for query in QUERY_TYPES:
+            t4_time = aws_gpu[(aws_gpu['dataset_size'] == size) & (aws_gpu['query'] == query)]['avg_query_time'].values
+            local_cpu_time = local_cpu[(local_cpu['dataset_size'] == size) & (local_cpu['query'] == query)]['avg_query_time'].values
 
-    # GPU Comparison (Sirius)
-    gpu_df = df_common[df_common['database'] == 'sirius']
-    gpu_avg = gpu_df.groupby(['dataset_size', 'platform'])['avg_query_time'].mean().unstack()
-    gpu_avg = gpu_avg.reindex(common_sizes)
-    # Reorder columns to ensure Local is first (darker color for local GPU)
-    gpu_avg = gpu_avg[['Local', 'AWS']]
+            if len(t4_time) > 0 and len(local_cpu_time) > 0:
+                t4_speedups.append({
+                    'dataset_size': size,
+                    'query': query,
+                    'speedup': local_cpu_time[0] / t4_time[0]
+                })
 
-    gpu_avg.plot(kind='bar', ax=ax2, color=['#238b45', '#74c476'], width=0.7)
-    ax2.set_title('GPU Comparison: RTX 3050 vs Tesla T4', fontsize=14, fontweight='bold')
-    ax2.set_xlabel('Dataset Size', fontsize=11)
-    ax2.set_ylabel('Avg Query Time (seconds)', fontsize=11)
-    ax2.set_xticklabels(ax2.get_xticklabels(), rotation=45, ha='right')
-    ax2.legend(['Local (RTX 3050)', 'AWS (Tesla T4)'], fontsize=10)
-    ax2.grid(axis='y', alpha=0.3)
+    # Calculate speedups for RTX 3050 vs AWS CPU (cross-platform comparison)
+    rtx_speedups = []
+    for size in common_sizes:
+        for query in QUERY_TYPES:
+            rtx_time = local_gpu[(local_gpu['dataset_size'] == size) & (local_gpu['query'] == query)]['avg_query_time'].values
+            aws_cpu_time = aws_cpu[(aws_cpu['dataset_size'] == size) & (aws_cpu['query'] == query)]['avg_query_time'].values
 
-    plt.suptitle('Platform Comparison: Local vs AWS Performance',
-                 fontsize=16, fontweight='bold')
+            if len(rtx_time) > 0 and len(aws_cpu_time) > 0:
+                rtx_speedups.append({
+                    'dataset_size': size,
+                    'query': query,
+                    'speedup': aws_cpu_time[0] / rtx_time[0]
+                })
+
+    # Plot T4 vs Local CPU
+    t4_df = pd.DataFrame(t4_speedups)
+    if len(t4_df) > 0:
+        x_labels = [f"{row['dataset_size']}\n{row['query']}" for _, row in t4_df.iterrows()]
+        x = np.arange(len(x_labels))
+
+        ax1.bar(x, t4_df['speedup'], width=0.7, color='#74c476')
+
+        ax1.set_xlabel('Dataset Size / Query Type', fontsize=11)
+        ax1.set_ylabel('Speedup Factor (×)', fontsize=11)
+        ax1.set_title('Tesla T4 (AWS) vs Local CPU (Core Ultra 7)', fontsize=14, fontweight='bold')
+        ax1.set_xticks(x)
+        ax1.set_xticklabels(x_labels, rotation=45, ha='right', fontsize=8)
+        ax1.axhline(y=1, color='red', linestyle='--', linewidth=1.5, alpha=0.7)
+        ax1.grid(axis='y', alpha=0.3)
+
+    # Plot RTX 3050 vs AWS CPU
+    rtx_df = pd.DataFrame(rtx_speedups)
+    if len(rtx_df) > 0:
+        x_labels = [f"{row['dataset_size']}\n{row['query']}" for _, row in rtx_df.iterrows()]
+        x = np.arange(len(x_labels))
+
+        ax2.bar(x, rtx_df['speedup'], width=0.7, color='#238b45')
+
+        ax2.set_xlabel('Dataset Size / Query Type', fontsize=11)
+        ax2.set_ylabel('Speedup Factor (×)', fontsize=11)
+        ax2.set_title('RTX 3050 (Local) vs AWS CPU (Xeon)', fontsize=14, fontweight='bold')
+        ax2.set_xticks(x)
+        ax2.set_xticklabels(x_labels, rotation=45, ha='right', fontsize=8)
+        ax2.axhline(y=1, color='red', linestyle='--', linewidth=1.5, alpha=0.7)
+        ax2.grid(axis='y', alpha=0.3)
+
+    plt.suptitle('Cross-Platform GPU vs CPU Comparison (>1× = GPU faster)',
+                 fontsize=14, fontweight='bold')
     plt.tight_layout()
-    plt.savefig(OUTPUT_DIR / '04_platform_comparison.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {OUTPUT_DIR / '04_platform_comparison.png'}")
+    plt.savefig(OUTPUT_DIR / '04_gpu_vs_cpu_speedups.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {OUTPUT_DIR / '04_gpu_vs_cpu_speedups.png'}")
     plt.close()
 
 
@@ -458,7 +491,7 @@ def main():
     plot_performance_comparison(df)
     plot_scaling_analysis(df)
     plot_speedup_factors(df)
-    # plot_platform_comparison(df)  # Removed - misleading due to CPU fallback in k_hop/shortest_path
+    plot_gpu_vs_cpus(df)
     plot_summary_heatmaps(df)
 
     # Generate summary report
