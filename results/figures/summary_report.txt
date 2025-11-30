@@ -6,20 +6,18 @@ Dataset Coverage:
   Local DuckDB: 100k, 1m, 5m, 20m
   Local Sirius: 100k, 1m, 5m, 20m
   AWS DuckDB: 100k, 1m, 5m, 20m
-  AWS Sirius: 100k, 1m, 5m, 20m, 50m, 100m
+  AWS Sirius: 100k, 1m, 5m, 20m
 
 Fastest Configuration by Dataset Size (averaged across queries):
-  100k: Local Sirius (0.0120s)
-  1m: Local Sirius (0.0225s)
-  5m: Local Sirius (0.0488s)
-  20m: Local Sirius (0.0567s)
+  100k: Local DuckDB (0.0172s)
+  1m: Local DuckDB (0.0874s)
+  5m: Local DuckDB (0.2252s)
+  20m: Local DuckDB (1.2917s)
 
 Average GPU Speedup Factors (Sirius vs DuckDB):
-  Local: 8.9×
-  AWS: 19.0×
+  Local: 0.5×
+  AWS: 1.0×
 
 Large Dataset Performance (AWS Sirius T4):
-  50m: 0.0772s average
-  100m: 0.1059s average
 
 ================================================================================

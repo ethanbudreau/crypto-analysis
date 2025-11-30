@@ -1,6 +1,6 @@
 # Current Status - GPU Benchmark Project
 
-**Last Updated**: 2025-11-29
+**Last Updated**: 2025-11-29 (AWS benchmarks completed 2025-11-30)
 
 ## ✅ Completed Work
 
@@ -20,10 +20,31 @@
 
 ### 3. Performance Analysis ✅
 
-#### GPU Acceleration Sweet Spot
-- **Best performance**: 2-hop queries on large datasets
-- **Crossover point**: ~5M edges for GPU to outperform CPU
-- **Initialization overhead**: GPU has fixed overhead (~7-8s) that dominates on small datasets
+#### AWS Benchmarks Completed (2025-11-30)
+- **Platform**: AWS g4dn.2xlarge (8 vCPU Xeon + Tesla T4)
+- **Method**: Query variation to prevent caching
+- **Coverage**: All 4 dataset sizes (100k, 1m, 5m, 20m) × 4 queries
+- **Key finding**: GPU shows up to 3.1x speedup on 2-hop queries (20M dataset)
+
+#### Performance Characteristics by Platform
+
+**AWS Tesla T4** (Best GPU results):
+- 2-hop query on 20M dataset: **3.1x GPU speedup** (5871ms → 1895ms)
+- 2-hop query on 5M dataset: **2.5x GPU speedup** (686ms → 273ms)
+- 1-hop queries: Mixed results (slight CPU advantage on smaller datasets)
+- k-hop/shortest_path: CPU faster due to UNION ALL fallback
+
+**Local RTX 3050** (Strong CPU dominance):
+- Intel Core Ultra 7 265k CPU outperforms RTX 3050 GPU on all queries
+- Example (5M dataset): 2-hop is 2.4x faster on CPU (182ms vs 430ms)
+- CPU advantage: Higher core count (20 cores) and clock speed (3.9-5.5 GHz)
+
+#### Caching Discovery and Resolution 🎯
+**Major finding**: Query caching significantly distorts benchmark results:
+- Identical queries showed 71x performance improvement (likely cached)
+- **Solution**: Vary WHERE clause per query (`WHERE n1.txId > {threshold}`)
+- All benchmarks now use query variation for realistic timing
+- Prevents both DuckDB result cache and Sirius query plan cache
 
 #### Recursive CTE Discovery 🎯
 **Major finding**: DuckDB's CPU-based recursive CTE is **significantly faster** than GPU for complex graph traversal:
@@ -67,15 +88,18 @@ Created `scripts/iterative_gpu_bfs.py` implementing true breadth-first search:
 ### Performance Characteristics
 
 **When to use GPU (Sirius)**:
-- Simple 1-hop and 2-hop queries
-- Large datasets (>5M edges)
+- 2-hop queries on large datasets (>5M edges) with slower CPUs (AWS)
+- Production environments with limited CPU resources
 - Queries without UNION ALL, recursion, or constant columns
+- **Best case**: 3.1x speedup on AWS Tesla T4 for 2-hop/20M dataset
 
 **When to use CPU (DuckDB)**:
-- k-hop traversal (use recursive CTE)
+- k-hop traversal (use recursive CTE - much faster)
 - Shortest path analysis (use recursive CTE)
-- Small datasets (<5M edges)
+- Any platform with fast multi-core CPU (20+ cores)
+- Local development (Intel Core Ultra 7 outperforms RTX 3050)
 - Queries with UNION ALL or complex aggregations
+- Small-medium datasets (<5M edges)
 
 ## 📁 Key Files
 
@@ -97,9 +121,9 @@ Created `scripts/iterative_gpu_bfs.py` implementing true breadth-first search:
 - `sql/queries/shortest_path.sql` - ⚠️ Use DuckDB recursive CTE instead
 
 ### Results
-- `results/persistent_session/` - Latest benchmark results
-- `results/aws_large_datasets/` - AWS benchmarks (50M, 100M datasets)
-- `results/figures/` - Visualization outputs
+- `results/persistent_session/` - Local benchmark results (varied queries)
+- `results/aws_persistent_session/` - AWS benchmark results (100k-20m datasets, varied queries)
+- `results/figures/` - Visualization outputs comparing local vs AWS performance
 
 ### Test/Reference Files
 - `adhoc_tests/` - Reference test scripts and SQL files (see `adhoc_tests/README.md`)
@@ -131,43 +155,68 @@ Created `scripts/iterative_gpu_bfs.py` implementing true breadth-first search:
 ### For Production Use
 
 1. **Use GPU (Sirius) for**:
-   - 1-hop and 2-hop queries on large datasets (>5M edges)
-   - Simple joins without UNION ALL
-   - Queries without constant columns
+   - 2-hop queries on large datasets (>10M edges) in CPU-constrained environments
+   - AWS or cloud platforms with limited CPU cores (8 or fewer)
+   - Workloads where 2-3x speedup justifies GPU complexity
+   - **Not recommended** on local systems with high-end CPUs (20+ cores)
 
 2. **Use CPU (DuckDB) for**:
-   - k-hop traversal (recursive CTE: ~0.45s for 20 hops on 5M)
-   - Shortest path analysis (recursive CTE)
-   - Small datasets (<5M edges)
+   - k-hop traversal (recursive CTE: ~0.45s for 20 hops on 5M) ⭐ **Recommended**
+   - Shortest path analysis (recursive CTE) ⭐ **Recommended**
+   - 1-hop queries (CPU competitive on all platforms)
+   - Any platform with modern multi-core CPU (Intel Core Ultra, Ryzen 9, etc.)
+   - Small-medium datasets (<10M edges)
    - Any query with UNION ALL or recursion
 
 3. **Benchmark Configuration**:
-   - Use persistent session mode with 100 queries per test
-   - Vary queries to prevent caching
-   - Exclude 3-hop from all benchmarks
+   - Use persistent session mode with 50-100 queries per test
+   - **CRITICAL**: Vary queries to prevent caching (`WHERE txId > {threshold}`)
+   - Exclude 3-hop from all benchmarks (causes segfaults)
    - Suppress Sirius stdout for clean output
+   - Test on target hardware - CPU architecture matters significantly
 
 ### For Future Work
 
 1. **Investigate Sirius GPU limitations**: Why do 6-table joins cause segfaults?
-2. **Profile recursive CTE performance**: Understand why CPU outperforms GPU
-3. **Test on larger datasets**: 50M, 100M edges (already prepared)
+2. **Profile recursive CTE performance**: Understand why CPU outperforms GPU for graph traversal
+3. **Test on larger datasets**: 50M, 100M edges on AWS (datasets prepared, benchmarks pending)
 4. **Explore persistent session workarounds**: Can we keep Sirius process alive between queries?
+5. **Test on different GPU architectures**: Compare RTX 3050 vs Tesla T4 vs A100
+6. **Investigate local GPU performance**: Why does RTX 3050 underperform relative to CPU?
 
 ## 📊 Dataset Status
 
 All datasets in 2-column format (txId, class):
-- `data/processed/nodes_100k.csv` + `edges_100k.csv` (1.6MB + 2.1MB)
-- `data/processed/nodes_1m.csv` + `edges_1m.csv` (15.8MB + 18.7MB)
-- `data/processed/nodes_5m.csv` + `edges_5m.csv` (69.5MB + 90.5MB)
-- `data/processed/nodes_20m.csv` + `edges_20m.csv` (272.8MB + 347.1MB)
-- `data/processed/nodes_50m.csv` + `edges_50m.csv` (AWS only)
-- `data/processed/nodes_100m.csv` + `edges_100m.csv` (AWS only)
 
-## ✨ Cleanup Complete
+**Local + AWS:**
+- `data/processed/nodes_100k.csv` + `edges_100k.csv` (1.6MB + 2.1MB) ✅ Benchmarked
+- `data/processed/nodes_1m.csv` + `edges_1m.csv` (15.8MB + 18.7MB) ✅ Benchmarked
+- `data/processed/nodes_5m.csv` + `edges_5m.csv` (69.5MB + 90.5MB) ✅ Benchmarked
+- `data/processed/nodes_20m.csv` + `edges_20m.csv` (272.8MB + 347.1MB) ✅ Benchmarked
 
+**AWS only (prepared, benchmarks pending):**
+- `data/processed/nodes_50m.csv` + `edges_50m.csv`
+- `data/processed/nodes_100m.csv` + `edges_100m.csv`
+
+## ✨ Recent Updates (2025-11-29/30)
+
+### Caching Investigation and Fix
+- Discovered query caching causing 71x performance anomalies
+- Implemented query variation using `WHERE txId > {threshold}` predicates
+- Re-ran all benchmarks with varied queries for accurate results
+
+### AWS Benchmarks Completed
+- Completed full benchmark suite on AWS g4dn.2xlarge (Tesla T4)
+- Downloaded results to `results/aws_persistent_session/`
+- Updated visualizations comparing local vs AWS performance
+- Key finding: GPU shows best performance on AWS (3.1x for 2-hop/20M)
+
+### Documentation Updates
+- Updated README.md with actual performance results (not inflated cached results)
+- Updated CURRENT_STATUS.md with AWS completion status
+- Generated comparison visualizations in `results/figures/`
+
+### Cleanup Previously Completed
 - Removed 37+ obsolete test files from `adhoc_tests/`
 - Cleaned old CSV results from `results/`
-- Updated all documentation
 - Added READMEs where needed
-- Removed `/tmp` test files

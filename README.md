@@ -23,44 +23,40 @@ Using the **Elliptic Bitcoin Transaction Dataset** (203K+ nodes, 234K+ edges), w
 
 ### 🎯 Key Findings
 
-**GPU acceleration provides up to 10.6x speedup** on large datasets for complex graph traversal queries:
+**Performance results show mixed outcomes for GPU acceleration**, with significant variations based on hardware platform, dataset size, and query complexity:
 
-#### Performance by Dataset Size
+#### Performance by Platform and Dataset Size
 
-**20M Edge Dataset** (⭐ Peak GPU Performance)
-| Query | DuckDB (CPU) | Sirius (GPU) | GPU Speedup |
-|-------|--------------|--------------|-------------|
-| 1_hop | 69.31 ms | 47.51 ms | 1.46x faster |
-| 2_hop | 461.34 ms | **49.80 ms** | **9.26x faster** ⭐ |
-| 3_hop | 476.59 ms | **45.06 ms** | **10.58x faster** ⭐ |
-
-**5M Edge Dataset** (GPU Crossover Point)
-| Query | DuckDB (CPU) | Sirius (GPU) | GPU Speedup |
-|-------|--------------|--------------|-------------|
-| 1_hop | 21.17 ms | 44.60 ms | 0.47x (CPU wins) |
-| 2_hop | 108.60 ms | **38.48 ms** | **2.82x faster** |
-| 3_hop | 104.84 ms | **40.33 ms** | **2.60x faster** |
-
-**1M Edge Dataset** (Mixed Results)
+**AWS Tesla T4 - 5M Edge Dataset**
 | Query | DuckDB (CPU) | Sirius (GPU) | Result |
 |-------|--------------|--------------|--------|
-| 1_hop | 9.89 ms | 15.37 ms | CPU 1.55x faster |
-| 2_hop | 22.44 ms | **13.01 ms** | GPU 1.72x faster |
-| 3_hop | 27.07 ms | **17.11 ms** | GPU 1.58x faster |
+| 1_hop | 149.9 ms | 176.1 ms | CPU 1.2x faster |
+| 2_hop | 685.9 ms | **273.3 ms** | **GPU 2.5x faster** ⭐ |
+| k_hop | 1878.5 ms | 2961.0 ms | CPU 1.6x faster |
+| shortest_path | 1389.4 ms | **1228.3 ms** | GPU 1.1x faster |
 
-**100k Edge Dataset** (CPU Wins on Simple Queries)
+**Local RTX 3050 - 5M Edge Dataset**
 | Query | DuckDB (CPU) | Sirius (GPU) | Result |
 |-------|--------------|--------------|--------|
-| 1_hop | **5.27 ms** | 9.90 ms | CPU 1.88x faster |
-| 2_hop | 10.24 ms | **7.02 ms** | GPU 1.46x faster |
-| 3_hop | 12.23 ms | **7.21 ms** | GPU 1.70x faster |
+| 1_hop | 44.6 ms | 234.3 ms | CPU 5.2x faster |
+| 2_hop | 182.4 ms | 429.5 ms | CPU 2.4x faster |
+| k_hop | 424.3 ms | 764.1 ms | CPU 1.8x faster |
+| shortest_path | 249.6 ms | 445.2 ms | CPU 1.8x faster |
+
+**AWS Tesla T4 - 20M Edge Dataset**
+| Query | DuckDB (CPU) | Sirius (GPU) | Result |
+|-------|--------------|--------------|--------|
+| 1_hop | 1148.6 ms | 1051.6 ms | GPU 1.1x faster |
+| 2_hop | 5871.2 ms | **1895.0 ms** | **GPU 3.1x faster** ⭐ |
+| k_hop | 10910.1 ms | 19064.1 ms | CPU 1.7x faster |
+| shortest_path | 4764.1 ms | **5206.3 ms** | CPU 1.1x faster |
 
 #### Key Insights
 
-1. **GPU wins at scale**: 10x speedup on 20M datasets for multi-hop traversal
-2. **Crossover point**: GPU becomes advantageous around 5M edges for complex queries
-3. **Query complexity matters**: 2-hop and 3-hop queries benefit more from GPU than 1-hop
-4. **Initialization overhead**: GPU has overhead that impacts small datasets
+1. **Hardware matters**: Tesla T4 (AWS) shows better GPU performance than RTX 3050 (local) relative to their respective CPUs
+2. **2-hop sweet spot**: 2-hop queries show the best GPU acceleration (up to 3.1x on AWS)
+3. **Local CPU advantage**: Intel Core Ultra 7 265k significantly outperforms AWS 8-vCPU Xeon, making GPU less beneficial locally
+4. **Query variation matters**: Results use varied queries to prevent caching, providing realistic per-query performance
 
 #### GPU Compatibility
 
@@ -78,12 +74,12 @@ Using the **Elliptic Bitcoin Transaction Dataset** (203K+ nodes, 234K+ edges), w
 
 > **Note:** For k-hop and shortest_path queries, DuckDB's CPU-based recursive CTE implementation is actually faster (~0.45s for full 20-hop BFS on 5M dataset) than GPU execution due to highly optimized recursion handling.
 
-**Overall Performance:**
-- **Sirius average**: 28.0 ms per query (24 tests)
-- **DuckDB average**: 110.7 ms per query (24 tests)
-- **Overall GPU advantage**: 3.95x speedup
+**Overall Performance (AWS Tesla T4):**
+- Best case: 3.1x GPU speedup (2-hop query, 20M dataset)
+- Average across all queries: Mixed results
+- Recommendation: Use GPU selectively for 2-hop queries on large datasets
 
-> 📊 **Methodology**: All benchmarks use persistent session mode (50 queries per session) to amortize initialization overhead and measure true query execution performance. See [VERIFIED_GPU_BENCHMARK_RESULTS.md](VERIFIED_GPU_BENCHMARK_RESULTS.md) for detailed analysis.
+> 📊 **Methodology**: All benchmarks use persistent session mode (50 queries per session) with **query variation** to prevent caching. Each query includes unique WHERE clause predicates (`txId > {threshold}`) to ensure realistic per-query execution times. Tested on both local hardware (Intel Core Ultra 7 265k + RTX 3050) and AWS cloud (8-vCPU Xeon + Tesla T4).
 
 ## Quick Start
 
@@ -257,15 +253,24 @@ An experimental `scripts/iterative_gpu_bfs.py` implements true breadth-first sea
 ## Benchmarking
 
 The benchmark suite measures:
-- **Query execution time** (persistent session with 100 queries per test)
+- **Query execution time** (persistent session with 50 queries per test)
 - **Memory/VRAM usage**
 - **CPU/GPU utilization**
 
-Results are scaled across dataset sizes:
-- 100K edges
-- 1M edges
-- 5M edges
-- 20M edges
+### Testing Methodology
+
+**Standard Datasets (100K, 1M, 5M, 20M edges):**
+- Tested on both DuckDB (CPU) and Sirius (GPU)
+- All queries: 1_hop, 2_hop, k_hop, shortest_path
+- Tested on both local and AWS platforms
+
+**Large Datasets (50M, 100M edges - AWS only):**
+- **Sirius GPU only** - 1_hop and 2_hop queries only
+- DuckDB CPU tests excluded (prohibitively slow on 8 vCPUs)
+- k_hop and shortest_path excluded (partial CPU fallback reduces GPU benefit)
+- Focus on fully GPU-accelerated queries for large-scale performance
+
+> **Rationale**: On AWS (8 vCPUs @ 2.5 GHz), CPU-based queries on 50M+ datasets would take hours per query. GPU tests focus on 1_hop and 2_hop as these are fully GPU-accelerated and demonstrate the best performance gains at scale.
 
 ## Technology Stack
 

@@ -74,20 +74,17 @@ def load_data():
     local_df = pd.read_csv(local_file)
     local_df['platform'] = 'Local'
 
-    # Load AWS data (100k-20M)
-    aws_file = "results/aws_testing/all_results_20251129_212145.csv"
-    print(f"  AWS: {aws_file}")
-    aws_df = pd.read_csv(aws_file)
-    aws_df['platform'] = 'AWS'
-
-    # Load AWS large datasets (50M, 100M)
-    aws_large_file = "results/aws_large_datasets/all_results_20251129_214343.csv"
-    print(f"  AWS Large: {aws_large_file}")
-    aws_large_df = pd.read_csv(aws_large_file)
-    aws_large_df['platform'] = 'AWS'
-
-    # Combine all data
-    df = pd.concat([local_df, aws_df, aws_large_df], ignore_index=True)
+    # Load AWS data - find most recent
+    aws_files = sorted(glob.glob("results/aws_persistent_session/all_results_*.csv"), reverse=True)
+    if aws_files:
+        aws_file = aws_files[0]
+        print(f"  AWS: {aws_file}")
+        aws_df = pd.read_csv(aws_file)
+        aws_df['platform'] = 'AWS'
+        df = pd.concat([local_df, aws_df], ignore_index=True)
+    else:
+        print("  Warning: No AWS results found, using local only")
+        df = local_df
 
     # Create configuration label
     df['config'] = df.apply(
@@ -461,7 +458,7 @@ def main():
     plot_performance_comparison(df)
     plot_scaling_analysis(df)
     plot_speedup_factors(df)
-    plot_platform_comparison(df)
+    # plot_platform_comparison(df)  # Removed - misleading due to CPU fallback in k_hop/shortest_path
     plot_summary_heatmaps(df)
 
     # Generate summary report
