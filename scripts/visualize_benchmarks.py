@@ -413,6 +413,301 @@ def plot_summary_heatmaps(df):
     plt.close()
 
 
+def generate_individual_figures(df):
+    """
+    Generate individual figures suitable for LaTeX 2-column format.
+    These are single, focused visualizations that can be placed in
+    either single-column or figure* (full-width) environments.
+    """
+    print("\nGenerating Individual Figures for LaTeX...")
+
+    # Create subdirectory for individual figures
+    latex_dir = OUTPUT_DIR / 'latex'
+    latex_dir.mkdir(parents=True, exist_ok=True)
+
+    # Filter to common dataset sizes
+    common_sizes = ['100k', '1m', '5m', '20m']
+    df_common = df[df['dataset_size'].isin(common_sizes)].copy()
+
+    # Get platform-specific data
+    local_cpu = df_common[(df_common['platform'] == 'Local') & (df_common['database'] == 'duckdb')]
+    aws_cpu = df_common[(df_common['platform'] == 'AWS') & (df_common['database'] == 'duckdb')]
+    local_gpu = df_common[(df_common['platform'] == 'Local') & (df_common['database'] == 'sirius')]
+    aws_gpu = df_common[(df_common['platform'] == 'AWS') & (df_common['database'] == 'sirius')]
+
+    # =========================================================================
+    # Individual Performance Comparison by Query Type (4 figures)
+    # =========================================================================
+    for query in QUERY_TYPES:
+        fig, ax = plt.subplots(figsize=(5, 4))
+        query_df = df_common[df_common['query'] == query]
+
+        pivot = query_df.pivot_table(
+            index='dataset_size',
+            columns='config',
+            values='avg_query_time',
+            aggfunc='mean'
+        )
+        pivot = pivot.reindex(common_sizes)
+        pivot = pivot[['Local DuckDB', 'Local Sirius', 'AWS DuckDB', 'AWS Sirius']]
+
+        pivot.plot(kind='bar', ax=ax, color=[COLORS[c] for c in pivot.columns], width=0.8)
+        ax.set_title(f'{query.replace("_", " ").title()} Query', fontsize=11, fontweight='bold')
+        ax.set_xlabel('Dataset Size', fontsize=10)
+        ax.set_ylabel('Avg Query Time (s)', fontsize=10)
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
+        ax.legend(fontsize=7, loc='upper left')
+        ax.grid(axis='y', alpha=0.3)
+
+        plt.tight_layout()
+        filename = f'perf_{query}.png'
+        plt.savefig(latex_dir / filename, dpi=300, bbox_inches='tight')
+        print(f"  Saved: {latex_dir / filename}")
+        plt.close()
+
+    # =========================================================================
+    # Individual Scaling Analysis by Query Type (4 figures)
+    # =========================================================================
+    for query in QUERY_TYPES:
+        fig, ax = plt.subplots(figsize=(5, 4))
+        query_df = df[df['query'] == query]
+
+        for config in ['Local DuckDB', 'Local Sirius', 'AWS DuckDB', 'AWS Sirius']:
+            config_df = query_df[query_df['config'] == config].copy()
+            config_df = config_df.sort_values('dataset_size_num')
+
+            if len(config_df) > 0:
+                ax.plot(config_df['dataset_size_num'],
+                       config_df['avg_query_time'],
+                       marker='o',
+                       label=config,
+                       color=COLORS[config],
+                       linewidth=2,
+                       markersize=5)
+
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        ax.set_title(f'{query.replace("_", " ").title()} Query', fontsize=11, fontweight='bold')
+        ax.set_xlabel('Number of Edges', fontsize=10)
+        ax.set_ylabel('Query Time (s)', fontsize=10)
+        ax.legend(fontsize=7)
+        ax.grid(True, which="both", ls="-", alpha=0.2)
+        ax.set_xticks([100_000, 1_000_000, 5_000_000, 20_000_000, 50_000_000, 100_000_000])
+        ax.set_xticklabels(['100k', '1M', '5M', '20M', '50M', '100M'], rotation=45, ha='right', fontsize=8)
+
+        plt.tight_layout()
+        filename = f'scaling_{query}.png'
+        plt.savefig(latex_dir / filename, dpi=300, bbox_inches='tight')
+        print(f"  Saved: {latex_dir / filename}")
+        plt.close()
+
+    # =========================================================================
+    # GPU Speedup Factors - Local (single figure)
+    # =========================================================================
+    fig, ax = plt.subplots(figsize=(5, 4))
+    platform_df = df_common[df_common['platform'] == 'Local']
+    speedup_data = []
+
+    for size in common_sizes:
+        for query in QUERY_TYPES:
+            duckdb_time = platform_df[
+                (platform_df['database'] == 'duckdb') &
+                (platform_df['dataset_size'] == size) &
+                (platform_df['query'] == query)
+            ]['avg_query_time'].values
+
+            sirius_time = platform_df[
+                (platform_df['database'] == 'sirius') &
+                (platform_df['dataset_size'] == size) &
+                (platform_df['query'] == query)
+            ]['avg_query_time'].values
+
+            if len(duckdb_time) > 0 and len(sirius_time) > 0:
+                speedup_data.append({
+                    'dataset_size': size,
+                    'query': query,
+                    'speedup': duckdb_time[0] / sirius_time[0]
+                })
+
+    speedup_df = pd.DataFrame(speedup_data)
+    if len(speedup_df) > 0:
+        pivot = speedup_df.pivot_table(index='dataset_size', columns='query', values='speedup')
+        pivot = pivot.reindex(common_sizes)
+        pivot = pivot[QUERY_TYPES]
+        pivot.plot(kind='bar', ax=ax, width=0.8)
+        ax.set_title('Local: RTX 3050 vs CPU', fontsize=11, fontweight='bold')
+        ax.set_xlabel('Dataset Size', fontsize=10)
+        ax.set_ylabel('Speedup (×)', fontsize=10)
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
+        ax.legend(title='Query', fontsize=7)
+        ax.axhline(y=1, color='red', linestyle='--', linewidth=1, alpha=0.5)
+        ax.grid(axis='y', alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(latex_dir / 'speedup_local.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {latex_dir / 'speedup_local.png'}")
+    plt.close()
+
+    # =========================================================================
+    # GPU Speedup Factors - AWS (single figure)
+    # =========================================================================
+    fig, ax = plt.subplots(figsize=(5, 4))
+    platform_df = df_common[df_common['platform'] == 'AWS']
+    speedup_data = []
+
+    for size in common_sizes:
+        for query in QUERY_TYPES:
+            duckdb_time = platform_df[
+                (platform_df['database'] == 'duckdb') &
+                (platform_df['dataset_size'] == size) &
+                (platform_df['query'] == query)
+            ]['avg_query_time'].values
+
+            sirius_time = platform_df[
+                (platform_df['database'] == 'sirius') &
+                (platform_df['dataset_size'] == size) &
+                (platform_df['query'] == query)
+            ]['avg_query_time'].values
+
+            if len(duckdb_time) > 0 and len(sirius_time) > 0:
+                speedup_data.append({
+                    'dataset_size': size,
+                    'query': query,
+                    'speedup': duckdb_time[0] / sirius_time[0]
+                })
+
+    speedup_df = pd.DataFrame(speedup_data)
+    if len(speedup_df) > 0:
+        pivot = speedup_df.pivot_table(index='dataset_size', columns='query', values='speedup')
+        pivot = pivot.reindex(common_sizes)
+        pivot = pivot[QUERY_TYPES]
+        pivot.plot(kind='bar', ax=ax, width=0.8)
+        ax.set_title('AWS: Tesla T4 vs CPU', fontsize=11, fontweight='bold')
+        ax.set_xlabel('Dataset Size', fontsize=10)
+        ax.set_ylabel('Speedup (×)', fontsize=10)
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
+        ax.legend(title='Query', fontsize=7)
+        ax.axhline(y=1, color='red', linestyle='--', linewidth=1, alpha=0.5)
+        ax.grid(axis='y', alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(latex_dir / 'speedup_aws.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {latex_dir / 'speedup_aws.png'}")
+    plt.close()
+
+    # =========================================================================
+    # Cross-Platform: T4 vs Local CPU (single figure)
+    # =========================================================================
+    fig, ax = plt.subplots(figsize=(5, 4))
+    t4_speedups = []
+    for size in common_sizes:
+        for query in QUERY_TYPES:
+            t4_time = aws_gpu[(aws_gpu['dataset_size'] == size) & (aws_gpu['query'] == query)]['avg_query_time'].values
+            local_cpu_time = local_cpu[(local_cpu['dataset_size'] == size) & (local_cpu['query'] == query)]['avg_query_time'].values
+
+            if len(t4_time) > 0 and len(local_cpu_time) > 0:
+                t4_speedups.append({
+                    'dataset_size': size,
+                    'query': query,
+                    'speedup': local_cpu_time[0] / t4_time[0]
+                })
+
+    t4_df = pd.DataFrame(t4_speedups)
+    if len(t4_df) > 0:
+        x_labels = [f"{row['dataset_size']}\n{row['query'].replace('_', '-')}" for _, row in t4_df.iterrows()]
+        x = np.arange(len(x_labels))
+        ax.bar(x, t4_df['speedup'], width=0.7, color='#74c476')
+        ax.set_xlabel('Dataset / Query', fontsize=10)
+        ax.set_ylabel('Speedup (×)', fontsize=10)
+        ax.set_title('T4 (AWS) vs Local CPU', fontsize=11, fontweight='bold')
+        ax.set_xticks(x)
+        ax.set_xticklabels(x_labels, rotation=45, ha='right', fontsize=6)
+        ax.axhline(y=1, color='red', linestyle='--', linewidth=1.5, alpha=0.7)
+        ax.grid(axis='y', alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(latex_dir / 'crossplatform_t4_vs_local_cpu.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {latex_dir / 'crossplatform_t4_vs_local_cpu.png'}")
+    plt.close()
+
+    # =========================================================================
+    # Cross-Platform: RTX 3050 vs AWS CPU (single figure)
+    # =========================================================================
+    fig, ax = plt.subplots(figsize=(5, 4))
+    rtx_speedups = []
+    for size in common_sizes:
+        for query in QUERY_TYPES:
+            rtx_time = local_gpu[(local_gpu['dataset_size'] == size) & (local_gpu['query'] == query)]['avg_query_time'].values
+            aws_cpu_time = aws_cpu[(aws_cpu['dataset_size'] == size) & (aws_cpu['query'] == query)]['avg_query_time'].values
+
+            if len(rtx_time) > 0 and len(aws_cpu_time) > 0:
+                rtx_speedups.append({
+                    'dataset_size': size,
+                    'query': query,
+                    'speedup': aws_cpu_time[0] / rtx_time[0]
+                })
+
+    rtx_df = pd.DataFrame(rtx_speedups)
+    if len(rtx_df) > 0:
+        x_labels = [f"{row['dataset_size']}\n{row['query'].replace('_', '-')}" for _, row in rtx_df.iterrows()]
+        x = np.arange(len(x_labels))
+        ax.bar(x, rtx_df['speedup'], width=0.7, color='#238b45')
+        ax.set_xlabel('Dataset / Query', fontsize=10)
+        ax.set_ylabel('Speedup (×)', fontsize=10)
+        ax.set_title('RTX 3050 (Local) vs AWS CPU', fontsize=11, fontweight='bold')
+        ax.set_xticks(x)
+        ax.set_xticklabels(x_labels, rotation=45, ha='right', fontsize=6)
+        ax.axhline(y=1, color='red', linestyle='--', linewidth=1.5, alpha=0.7)
+        ax.grid(axis='y', alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(latex_dir / 'crossplatform_rtx_vs_aws_cpu.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {latex_dir / 'crossplatform_rtx_vs_aws_cpu.png'}")
+    plt.close()
+
+    # =========================================================================
+    # Individual Heatmaps (4 figures)
+    # =========================================================================
+    configs = ['Local DuckDB', 'Local Sirius', 'AWS DuckDB', 'AWS Sirius']
+    config_filenames = {
+        'Local DuckDB': 'heatmap_local_duckdb',
+        'Local Sirius': 'heatmap_local_sirius',
+        'AWS DuckDB': 'heatmap_aws_duckdb',
+        'AWS Sirius': 'heatmap_aws_sirius'
+    }
+
+    for config in configs:
+        fig, ax = plt.subplots(figsize=(5, 4))
+        config_df = df[df['config'] == config]
+
+        available_sizes = sorted(config_df['dataset_size'].unique(),
+                                key=lambda x: DATASET_SIZE_MAP[x])
+
+        pivot = config_df.pivot_table(
+            index='dataset_size',
+            columns='query',
+            values='avg_query_time'
+        )
+        pivot = pivot.reindex(available_sizes)
+        pivot = pivot[[q for q in QUERY_TYPES if q in pivot.columns]]
+
+        sns.heatmap(pivot, annot=True, fmt='.3f', cmap='YlOrRd', ax=ax,
+                   cbar_kws={'label': 'Time (s)'})
+        ax.set_title(config, fontsize=11, fontweight='bold')
+        ax.set_xlabel('Query Type', fontsize=10)
+        ax.set_ylabel('Dataset Size', fontsize=10)
+        ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
+
+        plt.tight_layout()
+        filename = f'{config_filenames[config]}.png'
+        plt.savefig(latex_dir / filename, dpi=300, bbox_inches='tight')
+        print(f"  Saved: {latex_dir / filename}")
+        plt.close()
+
+    print(f"\n  All individual figures saved to: {latex_dir}")
+    print(f"  Total: {len(list(latex_dir.glob('*.png')))} figures")
+
+
 def generate_summary_report(df):
     """Generate text summary of key findings."""
     print("\nGenerating Summary Report...")
@@ -493,6 +788,9 @@ def main():
     plot_speedup_factors(df)
     plot_gpu_vs_cpus(df)
     plot_summary_heatmaps(df)
+
+    # Generate individual figures for LaTeX
+    generate_individual_figures(df)
 
     # Generate summary report
     generate_summary_report(df)
